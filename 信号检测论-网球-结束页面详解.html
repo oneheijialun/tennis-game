@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>结束页面详解 · 信号检测论 · 网球</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:#0d0d16;color:#fff;
+    font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,sans-serif;
+    line-height:1.85;font-size:15px;
+    padding:48px 24px 120px;
+  }
+  .doc{max-width:1000px;margin:0 auto;}
+  h1{font-size:clamp(22px,3vw,34px);letter-spacing:1px;line-height:1.4;margin-bottom:10px;}
+  h1 span{color:#ff8fa3;}
+  .sub{opacity:.72;font-size:14px;line-height:1.9;margin-bottom:8px;}
+  .src{opacity:.45;font-size:12px;margin-bottom:36px;}
+  h2{
+    font-size:clamp(17px,1.9vw,23px);letter-spacing:.5px;
+    margin:52px 0 6px;padding-top:22px;border-top:1px solid rgba(255,255,255,.13);
+  }
+  h2 .n{color:#ffd166;font-weight:800;margin-right:10px;}
+  h3{font-size:16px;margin:30px 0 8px;color:#ffd166;letter-spacing:.3px;}
+  h3.mute{color:#9fb6d4;}
+  p{margin:10px 0;opacity:.9;}
+  ul,ol{margin:10px 0 10px 1.5em;opacity:.9;}
+  li{margin:5px 0;}
+  b{color:#ffd166;}
+  em{color:#ff8fa3;font-style:normal;font-weight:700;}
+  code,.mono{
+    font-family:"Cascadia Mono",Consolas,"Courier New",monospace;
+    background:rgba(255,255,255,.075);border-radius:5px;padding:1px 6px;font-size:.91em;
+    color:#b8e6ff;white-space:nowrap;
+  }
+  a{color:#7ec8ff;}
+
+  table{border-collapse:collapse;margin:16px 0;font-size:13.5px;width:100%;}
+  th,td{border:1px solid rgba(255,255,255,.16);padding:7px 11px;text-align:center;}
+  th{background:rgba(255,255,255,.08);font-weight:600;}
+  td.l,th.l{text-align:left;}
+  tbody tr:hover{background:rgba(255,255,255,.035);}
+  caption{caption-side:top;text-align:left;font-size:12.5px;opacity:.6;padding-bottom:7px;}
+
+  .card{
+    background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.11);
+    border-radius:12px;padding:16px 20px;margin:18px 0;
+  }
+  .card.warn{background:rgba(255,180,84,.075);border-color:rgba(255,180,84,.32);}
+  .card.key{background:rgba(94,227,138,.075);border-color:rgba(94,227,138,.3);}
+  .card h4{font-size:14px;letter-spacing:.5px;margin-bottom:6px;color:#ffd166;}
+
+  .formula{
+    font-family:"Cascadia Mono",Consolas,monospace;font-size:15px;
+    background:rgba(0,0,0,.42);border-left:3px solid #ffd166;border-radius:0 8px 8px 0;
+    padding:12px 18px;margin:14px 0;color:#ffe9a8;line-height:2.1;white-space:pre-wrap;
+  }
+  .pill{
+    display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:700;
+    background:rgba(255,255,255,.12);margin-right:4px;
+  }
+  .pH{color:#5ee38a}.pM{color:#ffb454}.pF{color:#ff6b81}.pR{color:#63b8ff}
+  .dg{color:#5ee38a;font-weight:700}
+  .db{color:#ff6b81;font-weight:700}
+  .dn{opacity:.55}
+  .big{font-size:1.15em;font-weight:800;font-variant-numeric:tabular-nums;}
+
+  .toc{
+    background:rgba(255,255,255,.04);border-radius:12px;padding:14px 22px;margin:24px 0 8px;
+    font-size:13.5px;columns:2;column-gap:34px;
+  }
+  .toc a{display:block;padding:2px 0;text-decoration:none;opacity:.85;}
+  .toc a:hover{color:#ffd166;opacity:1;}
+  .toc .h{color:#ffd166;font-weight:700;columns:1;display:block;margin-bottom:6px;}
+  svg{display:block;max-width:100%;height:auto;margin:8px auto;}
+  .peers{
+    display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;
+    margin:20px 0 6px;font-size:13.5px;
+  }
+  .peers a{
+    display:inline-block;padding:6px 14px;border-radius:8px;
+    background:rgba(126,200,255,.1);border:1px solid rgba(126,200,255,.3);
+    text-decoration:none;font-weight:600;
+  }
+  .peers a:hover{background:rgba(126,200,255,.2);border-color:rgba(126,200,255,.6);}
+  .peers .hint{opacity:.5;font-size:12.5px;}
+  .legend{font-size:12.5px;opacity:.7;text-align:center;margin-top:-4px;}
+  @media (max-width:700px){ .toc{columns:1;} table{font-size:12px;} th,td{padding:5px 6px;} }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>结束页面详解 · <span>信号检测论 · 网球</span></h1>
+<p class="sub">
+  结果页上的每个数字是怎么来的：<b>d′ 敏感度由什么控制</b>、<b>β 怎么体现</b>、<b>简单 / 普通 / 困难三档差在哪</b>。
+</p>
+<p class="src">
+  对照源码：<code>信号检测论-网球.html</code> · 体例：全部数值由该文件的 <code>computeStats()</code>、<code>buildTrials()</code>、<code>DIFF</code> 复算得到，非估算。
+</p>
+
+<p class="peers">
+  <a href="信号检测论-网球.html">← 回到游戏</a>
+  <a href="信号检测论-网球-概念实验室.html">概念实验室 →</a>
+  <span class="hint">读完这页，去实验室亲手拧一遍 d′ / c / 先验与奖惩的旋钮</span>
+</p>
+
+<div class="toc">
+  <span class="h">目录</span>
+  <a href="#s0">0. 三十秒速览</a>
+  <a href="#s1">1. 结果页的数据流</a>
+  <a href="#s2">2. d′ 敏感度是如何被控制的</a>
+  <a href="#s3">3. β 是如何体现的</a>
+  <a href="#s4">4. 简单 / 普通 / 困难逐项对比</a>
+  <a href="#s5">5. 结果页读数参考表</a>
+  <a href="#s6">6. 实现细节与已知坑</a>
+  <a href="#s7">7. 备忘卡</a>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s0"><span class="n">0</span>三十秒速览</h2>
+
+<table>
+  <tr><th class="l" style="width:23%">问题</th><th class="l">答案</th></tr>
+  <tr>
+    <td class="l"><b>d′ 由谁控制？</b></td>
+    <td class="l">游戏。<b>四个旋钮</b>：落点离线距离 <code>clearBias</code>、视觉抖动幅度 <code>noise</code>、
+      飞行时长 <code>T</code>、球的可见度 <code>ballA</code>。三档难度就是把这四个旋钮拧到不同位置。</td>
+  </tr>
+  <tr>
+    <td class="l"><b>β 由谁控制？</b></td>
+    <td class="l">你自己。游戏<b>不设定 β</b>，也没有收益矩阵；β 是同一份 H / FA 数据里顺带解出来的
+      <em>反应偏向</em>，是果不是因。</td>
+  </tr>
+  <tr>
+    <td class="l"><b>三档差在哪？</b></td>
+    <td class="l">明显球占比 <span class="big">86% / 57% / 24%</span>，
+      抖动振幅 <span class="big">2.2 / 4.5 / 8.9 px</span>，
+      反应窗 <span class="big">1.95 / 1.75 / 1.45 s</span>。</td>
+  </tr>
+  <tr>
+    <td class="l"><b>最关键的一点</b></td>
+    <td class="l">界内球和界外球的落点分布<b>根本不重叠</b>（最小离线 5 cm / 6 cm）。
+      所以 d′ 不是被「落点重叠」限制的，而是被<em>知觉噪声</em>限制的——
+      一个能准确读出落点的观察者，d′ 是无穷大。</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="n">1</span>结果页的数据流</h2>
+
+<h3>1.1 从 12 球到 2×2 四格</h3>
+
+<p>
+  一轮固定 <b>12 球</b>：<b>6 个界内球</b>（信号）、<b>4 个界外球</b> + <b>2 个空发球</b>（噪音）。
+  界外球和空发球都算噪音，所以 <code>nN = 4 + 2 = 6</code>，与 <code>nS = 6</code> 配平。
+</p>
+
+<table>
+  <caption>四格映射（源码 <code>resolve()</code>）</caption>
+  <tr>
+    <th class="l"></th>
+    <th>你挥拍了<br><span style="font-weight:400;opacity:.65;font-size:.86em">报告「有信号」</span></th>
+    <th>你没挥拍<br><span style="font-weight:400;opacity:.65;font-size:.86em">报告「无信号」</span></th>
+  </tr>
+  <tr>
+    <th class="l">界内球（信号）</th>
+    <td><b class="pH">击中 H</b></td>
+    <td><b class="pM">漏报 M</b></td>
+  </tr>
+  <tr>
+    <th class="l">界外球 / 空发球（噪音）</th>
+    <td><b class="pF">虚报 FA</b></td>
+    <td><b class="pR">正确拒绝 CR</b></td>
+  </tr>
+</table>
+
+<h3>1.2 四格到四个指标</h3>
+
+<div class="formula">P(H)  = H  / 6          P(FA) = FA / 6
+
+d′ = z(H) − z(FA)                     ← 辨别力（敏感度）
+c  = −½ · [ z(H) + z(FA) ]             ← 判定标准（标准分刻度）
+β  = exp{ [ z(FA)² − z(H)² ] / 2 }      ← 似然比（比值刻度）
+A′ = Grier 非参数 ROC 面积              ← 不依赖正态假设的备选</div>
+
+<p>
+  其中 <code>z()</code> 是标准正态分布的逆函数（源码用 Acklam 算法实现 <code>zInv()</code>）。
+  结果页上 <b>d′ 是能力</b>，<b>c 和 β 是偏向</b>，<b>A′ 是能力的非参数版本</b>。
+</p>
+
+<h3>1.3 零格校正：为什么你的 d′ 永远不可能是 ∞</h3>
+
+<p>
+  如果某一格是 0，<code>z()</code> 会发散成 ±∞。所以源码里有个开关：
+</p>
+
+<div class="formula">clean = (H &gt; 0 &amp;&amp; M &gt; 0 &amp;&amp; FA &gt; 0 &amp;&amp; CR &gt; 0)
+
+clean ?  直接用原始比例  P(H)=H/6,  P(FA)=FA/6
+      :  用 0.5 对数线性校正（Hautus 1995）
+            hh = (H  + 0.5) / (nS + 1) = (H  + 0.5) / 7
+            ff = (FA + 0.5) / (nN + 1) = (FA + 0.5) / 7</div>
+
+<p>
+  四格全非零时，结果页底部会显示「<i>各格均非 0，指标无需校正</i>」；出现 0 格则显示
+  「<i>本次 H/M/FA/CR 中有 0 格，d′ 等指标已用 0.5 对数线性校正估算</i>」。
+</p>
+
+<div class="card key">
+  <h4>这带来一个必须知道的天花板</h4>
+  <p>
+    打出满分 6/6（H=6, M=0, FA=0, CR=6）时，校正给出 <code>hh = 6.5/7 = 0.9286</code>、
+    <code>ff = 0.5/7 = 0.0714</code>，于是
+  </p>
+  <p style="text-align:center" class="big">d′ = 1.4652 − (−1.4652) = <span class="dg">2.930</span></p>
+  <p>
+    也就是说：<b>单轮 d′ 的取值被硬夹在 [−2.93, +2.93] 之间</b>。哪怕你知觉完美，
+    结果页也不会出现比 2.93 更大的数。看到 2.93 就等于「这轮全对」，
+    而不是「我的 d′ 刚好是 2.93」。
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="n">2</span>d′ 敏感度是如何被控制的</h2>
+
+<h3>2.1 前提：两个落点分布根本不重叠</h3>
+
+<p>
+  球的落点由 <code>buildTrials()</code> 生成，<code>BN = −11.885</code> 是近端底线：
+</p>
+
+<div class="formula">界内球：  landZ = BN + m     m ∈ [0.05, 3.60]   （离线 m 米在界内）
+界外球：  landZ = BN − m     m ∈ [0.06, 1.45]   （离线 m 米在界外）
+空发球：  不生成球</div>
+
+<p>
+  界内球最贴近底线也有 <b>5 cm</b> 余量，界外球最近也有 <b>6 cm</b>。
+  两个分布之间有一道真空带——<b>没有任何一个球落在离底线 ±5 cm 以内</b>。
+</p>
+
+<div class="card warn">
+  <h4>结论：d′ 不来自「落点重叠」</h4>
+  <p>
+    一个能<em>准确读出落点</em>的观察者永远不可能错，它的 d′ 是无穷大，
+    三档难度对它没有任何区别。所以本作的 d′ <b>完全来自「你看不清落点」这件事</b>。
+    难度参数不是在制造信号与噪音的重叠，而是在决定<b>你要看清到什么程度才够用</b>。
+  </p>
+</div>
+
+<h3>2.2 于是：d′ ≈ 离线距离 ÷ 知觉噪声</h3>
+
+<p>
+  设玩家从球的飞行中估计落点，估计误差服从 <code>N(0, σ)</code>（单位：米），
+  然后按「估计落点是否越过底线」决定挥拍。对离线 m 米的球：
+</p>
+
+<div class="formula">界内球被判「界内」的概率 = Φ( m / σ)
+界外球被判「界内」的概率 = Φ(−m / σ) = 1 − Φ(m / σ)</div>
+
+<p>
+  代入三档各自的离线分布，同一个 σ 下三种难度的<b>期望 d′</b> 如下
+  （已计入 2 个空发球试次、按 25% 误报率计）：
+</p>
+
+<table>
+  <caption>解析期望 d′ = f(知觉噪声 σ)　—— 不同难度曲线不重合</caption>
+  <tr><th class="l">σ（落点估计误差）</th><th>0.3 m</th><th>0.5 m</th><th>0.75 m</th><th>1.0 m</th><th>1.25 m</th><th>1.5 m</th><th>2.0 m</th><th>3.0 m</th></tr>
+  <tr><th class="l">简单 easy</th><td class="dg">3.51</td><td class="dg">3.17</td><td class="dg">2.75</td><td class="dg">2.38</td><td>2.09</td><td>1.86</td><td>1.51</td><td>1.11</td></tr>
+  <tr><th class="l">普通 normal</th><td class="dg">2.92</td><td class="dg">2.48</td><td>2.08</td><td>1.79</td><td>1.58</td><td>1.41</td><td>1.18</td><td>0.89</td></tr>
+  <tr><th class="l">困难 hard</th><td class="dg">2.51</td><td class="dg">1.98</td><td>1.56</td><td>1.31</td><td>1.13</td><td>1.01</td><td>0.83</td><td>0.64</td></tr>
+</table>
+
+<p>
+  读法：一个 σ = 1.0 m 的玩家，在简单档能打出 <b>d′ ≈ 2.4</b>，换到困难档只剩 <b>1.3</b>。
+</p>
+
+<div class="card key">
+  <h4>这就是「敏感度被控制」的直接证据</h4>
+  <p>
+    <b>同一个玩家，换个难度，结果页上的 d′ 就变了。</b>
+    所以 d′ 在结果页上衡量的是「<em>你 + 这一档难度</em>」的联合表现，而不是你的固有属性。
+    跨难度比较自己时，请记住这一点。
+  </p>
+</div>
+
+<p>反过来问「要多准才能打出 d′ = 1.5」，各档允许的噪声明细：</p>
+
+<table>
+  <caption>等效噪声容限：σ 越大 = 该档越宽容</caption>
+  <tr><th class="l">目标 d′</th><th>简单 easy</th><th>普通 normal</th><th>困难 hard</th><th class="l">简单档宽容倍数</th></tr>
+  <tr><th class="l">1.0</th><td>3.46 m</td><td>2.52 m</td><td>1.51 m</td><td class="l">2.3×</td></tr>
+  <tr><th class="l">1.5</th><td>2.02 m</td><td>1.37 m</td><td>0.80 m</td><td class="l">2.5×</td></tr>
+  <tr><th class="l">2.0</th><td>1.34 m</td><td>0.81 m</td><td>0.49 m</td><td class="l">2.7×</td></tr>
+  <tr><th class="l">2.5</th><td>0.91 m</td><td>0.49 m</td><td>0.30 m</td><td class="l">3.0×</td></tr>
+</table>
+
+<p>
+  想要 d′ = 2，简单档容忍 1.34 m 的落点估计误差，困难档只容忍 0.49 m。
+</p>
+
+<h3>2.3 具体是哪四个旋钮</h3>
+
+<table>
+  <caption>源码 <code>DIFF</code> 对象逐项对照</caption>
+  <tr>
+    <th class="l">参数</th><th class="l">含义</th>
+    <th>简单</th><th>普通</th><th>困难</th>
+  </tr>
+  <tr>
+    <td class="l"><code>clearBias</code></td>
+    <td class="l">抽到「明显球」的概率（越大离线越远）</td>
+    <td class="dg">0.85</td><td>0.55</td><td class="db">0.20</td>
+  </tr>
+  <tr>
+    <td class="l"><code>noise</code></td>
+    <td class="l">视觉抖动的基准幅度</td>
+    <td class="dg">0.75</td><td>1.35</td><td class="db">2.30</td>
+  </tr>
+  <tr>
+    <td class="l"><code>T</code></td>
+    <td class="l">球飞行时长 = 反应窗长度（秒）</td>
+    <td class="dg">1.95</td><td>1.75</td><td class="db">1.45</td>
+  </tr>
+  <tr>
+    <td class="l"><code>ballA</code></td>
+    <td class="l">球体／光晕／影子的绘制不透明度</td>
+    <td>1.00</td><td>1.00</td><td class="db">0.92</td>
+  </tr>
+</table>
+
+<h4 style="margin-top:26px;font-size:15px;color:#ffd166">旋钮 ①　<code>clearBias</code> —— 落点离线多远（主旋钮）</h4>
+
+<p>每个球先掷一次骰子决定走「明显」还是「模糊」分支：</p>
+
+<div class="formula">明显界内： m ~ U(1.10, 3.60)      模糊界内： m ~ U(0.05, 1.10)
+明显界外： m ~ U(0.85, 1.45)      模糊界外： m ~ U(0.06, 0.85)</div>
+
+<svg viewBox="0 0 800 282" role="img" aria-label="三种难度下界内/界外球的离线距离分布">
+  <defs>
+    <style>
+      .ax{stroke:rgba(255,255,255,.45);stroke-width:1.2}
+      .bl{stroke:rgba(255,255,255,.55);stroke-width:1.4;stroke-dasharray:5 4}
+      .tk{fill:rgba(255,255,255,.6);font-size:11px;text-anchor:middle;font-family:sans-serif}
+      .rl{font-size:12.5px;font-weight:700;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+      .sl{font-size:11px;font-family:"PingFang SC","Microsoft YaHei",sans-serif;text-anchor:middle}
+      .side{font-size:12.5px;font-weight:700;font-family:"PingFang SC","Microsoft YaHei",sans-serif;text-anchor:middle}
+    </style>
+  </defs>
+
+  <!-- 底线竖线 -->
+  <line class="bl" x1="283" y1="34" x2="283" y2="240"/>
+  <text class="tk" x="283" y="26">底线</text>
+  <text class="sl" x="640" y="26" fill="rgba(255,255,255,.55)">离线距离（米）</text>
+
+  <!-- 简单 -->
+  <rect x="94.5"  y="52" width="78"    height="22" fill="#ff6b81" opacity="0.85"/>
+  <rect x="172.5" y="52" width="102.7" height="22" fill="#ff6b81" opacity="0.15"/>
+  <rect x="289.5" y="52" width="136.5" height="22" fill="#5ee38a" opacity="0.15"/>
+  <rect x="426"   y="52" width="325"   height="22" fill="#5ee38a" opacity="0.85"/>
+  <text class="rl" x="80" y="60" fill="#5ee38a" text-anchor="end">简单</text>
+  <text class="sl" x="283" y="88" fill="rgba(255,255,255,.62)">明显 85% ｜ 模糊 15%</text>
+
+  <!-- 普通 -->
+  <rect x="94.5"  y="122" width="78"    height="22" fill="#ff6b81" opacity="0.55"/>
+  <rect x="172.5" y="122" width="102.7" height="22" fill="#ff6b81" opacity="0.45"/>
+  <rect x="289.5" y="122" width="136.5" height="22" fill="#5ee38a" opacity="0.45"/>
+  <rect x="426"   y="122" width="325"   height="22" fill="#5ee38a" opacity="0.55"/>
+  <text class="rl" x="80" y="130" fill="#ffd166" text-anchor="end">普通</text>
+  <text class="sl" x="283" y="158" fill="rgba(255,255,255,.62)">明显 55% ｜ 模糊 45%</text>
+
+  <!-- 困难 -->
+  <rect x="94.5"  y="192" width="78"    height="22" fill="#ff6b81" opacity="0.20"/>
+  <rect x="172.5" y="192" width="102.7" height="22" fill="#ff6b81" opacity="0.80"/>
+  <rect x="289.5" y="192" width="136.5" height="22" fill="#5ee38a" opacity="0.80"/>
+  <rect x="426"   y="192" width="325"   height="22" fill="#5ee38a" opacity="0.20"/>
+  <text class="rl" x="80" y="200" fill="#ff8fa3" text-anchor="end">困难</text>
+  <text class="sl" x="283" y="228" fill="rgba(255,255,255,.62)">明显 20% ｜ 模糊 80%</text>
+
+  <!-- 两侧标注 -->
+  <text class="side" x="165" y="252" fill="#ff6b81">← 界外 ←</text>
+  <text class="side" x="560" y="252" fill="#5ee38a">→ 界内 →</text>
+
+  <!-- 轴 -->
+  <line class="ax" x1="75" y1="266" x2="760" y2="266"/>
+  <text class="tk" x="88"  y="280">−1.5</text>
+  <text class="tk" x="153" y="280">−1.0</text>
+  <text class="tk" x="283" y="280">0</text>
+  <text class="tk" x="413" y="280">1.0</text>
+  <text class="tk" x="543" y="280">2.0</text>
+  <text class="tk" x="673" y="280">3.0</text>
+</svg>
+<p class="legend">色块宽度 = 该分支的离线区间；<b>色块浓淡 = 该分支被抽中的概率</b>（不透明度即概率）。灰阶越浓表示越多球落在这里。</p>
+
+<p>
+  注意一个<b>不对称</b>：明显界内最远能到 <b>3.60 m</b>，明显界外最远只有 <b>1.45 m</b>。
+  也就是「一眼就看出是界内」的球，比「一眼就看出是界外」的球明显得多。
+</p>
+
+<p>实测平均离线距离：</p>
+
+<table>
+  <tr><th class="l">难度</th><th>界内球平均离线</th><th>界外球平均离线</th><th>全部球明显率<br><span style="font-weight:400;opacity:.6;font-size:.86em">离线 &gt; 1.05 m</span></th></tr>
+  <tr><th class="l">简单</th><td class="dg">2.085 m</td><td class="dg">1.045 m</td><td class="dg">74.5%</td></tr>
+  <tr><th class="l">普通</th><td>1.551 m</td><td>0.838 m</td><td>48.8%</td></tr>
+  <tr><th class="l">困难</th><td class="db">0.931 m</td><td class="db">0.594 m</td><td class="db">18.9%</td></tr>
+</table>
+
+<h4 style="margin-top:26px;font-size:15px;color:#ffd166">旋钮 ②　<code>noise</code> —— 视觉抖动（威力最大）</h4>
+
+<p>
+  <code>drawBall()</code> 把抖动<em>直接加在球的屏幕坐标上</em>：
+</p>
+
+<div class="formula">sp  = 球速 = ‖(vx, vy, vz)‖
+sig = noise × (0.9 + sp × 0.22)                      ← 抖动振幅（像素）
+
+jx = [0.55·sin(37.1t + seed) + 0.45·sin(13.7t + 1.7·seed) + 0.25·N(0,1)] × sig
+jy = [0.55·cos(31.3t + 0.6·seed) + 0.45·cos(17.1t + 2.1·seed) + 0.25·N(0,1)] × sig
+
+屏幕位置 = 真实投影位置 + (jx, jy)</div>
+
+<table>
+  <caption>复算所得的实际抖动振幅</caption>
+  <tr><th class="l">难度</th><th>T</th><th>球速 sp</th><th>noise</th><th>抖动振幅 sig</th></tr>
+  <tr><th class="l">简单</th><td>1.95 s</td><td>≈9.51 m/s</td><td>0.75</td><td class="dg">≈2.24 px</td></tr>
+  <tr><th class="l">普通</th><td>1.75 s</td><td>≈10.89 m/s</td><td>1.35</td><td>≈4.45 px</td></tr>
+  <tr><th class="l">困难</th><td>1.45 s</td><td>≈13.56 m/s</td><td>2.30</td><td class="db">≈8.93 px</td></tr>
+</table>
+
+<p>参考：球在落点附近的投影半径约 15 px 量级。所以困难档的球是在「以自身半径为尺度」地乱抖。</p>
+
+<div class="card">
+  <h4>三件必须注意的事</h4>
+  <ol>
+    <li>
+      <b>双重放大。</b>抖动振幅随球速增大，而困难档的 T 更短 ⇒ 球更快。
+      所以困难档相对简单档是 <code>noise</code> 大 3.07 倍 × 球速高 1.43 倍 ≈ <b>4 倍</b>的抖动。
+      两个旋钮（<code>noise</code> 和 <code>T</code>）在这里是耦合的。
+    </li>
+    <li>
+      <b>盯着看也平均不掉。</b>抖动里有 <code>0.25·N(0,1)</code> 这一项是<em>逐帧白噪声</em>，
+      每秒重新抽 60 次。想靠长时间注视把噪点平均掉是无效的——
+      只有 <code>sin</code>／<code>cos</code> 那两个低频摆动项在时间上是平滑的。
+    </li>
+    <li>
+      <b>抖动是屏幕像素常量，不随景深缩放。</b>代码把 <code>jx/jy</code> 直接加在投影后的像素坐标上，
+      而球的像素半径是 <code>FOC·BALL_R/depth</code>，会随距离变小。
+      结果是：<b>球在远处（像素半径小）时，相对抖动更严重</b>。
+      这是实现层面的副作用，不是刻意设计——但也算给"提前预判"加了点惩罚。
+    </li>
+  </ol>
+</div>
+
+<h4 style="margin-top:26px;font-size:15px;color:#ffd166">旋钮 ③　<code>T</code> —— 飞行时长 = 反应窗长度</h4>
+
+<p>
+  <code>T</code> 一鱼三吃：
+</p>
+<ul>
+  <li>它是<b>反应窗长度</b>——<code>swing()</code> 里 <code>if (G.t &gt;= G.T) return;</code>，球落地那一帧窗就关了，之后按空格无效。</li>
+  <li>它决定<b>球速</b>——<code>vz = (landZ − z0) / T</code>，T 越短球越快。</li>
+  <li>于是它通过旋钮 ② 的 <code>sp</code> 项<b>放大视觉抖动</b>。</li>
+</ul>
+<p>
+  三档的预备期都固定 <b>0.75 s</b>（<code>if (G.preT &gt;= 0.75) beginFlight()</code>），没有难度差异。
+</p>
+
+<h4 style="margin-top:26px;font-size:15px;color:#ffd166">旋钮 ④　<code>ballA</code> —— 球的可见度</h4>
+
+<p>
+  作用于球体渐变、光晕和地面影子三处的不透明度。困难档的球和影子都淡 <b>8%</b>。
+  影响幅度不大，属于陪衬性的难度调节。
+</p>
+
+<h3>2.4 三个「不能用」的线索</h3>
+
+<p>设计得当的地方在于：球身上其实还带着三个看起来有用、实际无用的线索。</p>
+
+<table>
+  <tr><th class="l">线索</th><th class="l">为什么没用</th></tr>
+  <tr>
+    <td class="l">横向落点 <code>landX</code></td>
+    <td class="l"><code>landX ~ U(−3.2, 3.2)</code>，永远落在单打边线（±4.115）以内。
+      <b>左右方向不携带任何「界内 / 界外」信息</b>——只有纵深 z 方向的落点才是判据。</td>
+  </tr>
+  <tr>
+    <td class="l">来球角度</td>
+    <td class="l">起手点 <code>x0 = landX×0.45 + U(±1.2)</code>，额外加了随机量，
+      没法从来球方向反推落点。</td>
+  </tr>
+  <tr>
+    <td class="l">「这球发没发」</td>
+    <td class="l">2 个空发球试次的<b>预备时长、节奏条长度、发球提示音</b>与其他试次完全一致
+      （源码注释：「所有试次时长一致，不泄露是球还是空发球」）。
+      所以空发球只能靠眼睛发现「球没出现」，不能靠节奏提前预判。</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="n">3</span>β 是如何体现的</h2>
+
+<h3>3.1 β 是玩家的，不是游戏的</h3>
+
+<p>
+  <code>DIFF</code> 里没有任何一项和 β 有关。回顾一下因果方向：
+</p>
+
+<div class="formula">游戏难度参数（DIFF）  →  决定 d′ 的可及范围   →  你的 H / FA 分布
+                                                      ↓
+                            同一份 H / FA 数据里，同时解出 d′（能力）与 β、c（偏向）</div>
+
+<p>
+  <b>d′ 是被操控的自变量，β 是顺带观测到的因变量。</b>
+  游戏没有提供任何手段去"设置"你的 β——它只能通过难度间接影响你，
+  而你对 β 的贡献是完全自主的。
+</p>
+
+<h3>3.2 β 的读数</h3>
+
+<div class="formula">β = exp{ [ z(FA)² − z(H)² ] / 2 }</div>
+
+<table>
+  <tr><th class="l">读数</th><th class="l">含义</th><th class="l">结果页上的文案</th></tr>
+  <tr><td class="l"><b>β &gt; 1</b></td><td class="l">保守：要求足够强的证据才挥拍</td><td class="l">倾向放掉，代价是漏报多</td></tr>
+  <tr><td class="l"><b>β = 1</b></td><td class="l">中立：无偏向</td><td class="l">比较中性</td></tr>
+  <tr><td class="l"><b>β &lt; 1</b></td><td class="l">冒进：证据不强也挥</td><td class="l">倾向挥拍，代价是虚报多</td></tr>
+</table>
+
+<p>
+  β 的绝对值很好懂：<b>β = 2 就是「我认为界内的先验几率要达到 2 : 1，我才挥拍」</b>。
+</p>
+
+<h3>3.3 β 在 ROC 图上的位置</h3>
+
+<p>结果页右下角那张 ROC 图同时编码了 d′ 和 β，读法如下：</p>
+
+<table>
+  <tr><th class="l">图元</th><th class="l">含义</th></tr>
+  <tr><td class="l">灰色虚线对角线</td><td class="l">瞎猜（d′ = 0）。落在对角线附近 ⇒ 这轮基本靠猜。</td></tr>
+  <tr><td class="l">蓝色曲线</td><td class="l">用你这轮的 <b>d′</b> 拟合出的等方差 ROC。
+    <b>曲线离对角线多远 = d′</b>。</td></tr>
+  <tr><td class="l"><span style="color:#ff6b8f">●</span> 红色实测点</td><td class="l">你的 <code>(P(FA), P(H))</code>。
+    <b>点在曲线上滑到哪个位置 = β</b>。越靠左上角，β 越大。</td></tr>
+</table>
+
+<p>
+  所以这张图是「一条曲线 + 曲线上一个点」：<em>曲线形状说能力，点的位置说偏向</em>。
+  两个玩家可以有完全相同的 d′（曲线重合），但落在曲线上的不同位置（β 不同）。
+</p>
+
+<h3>3.4 关键：β = exp(d′ · c)，所以 β 不能跨难度比较</h3>
+
+<p>
+  在本作的等方差正态模型下，结果页上的三个指标严格满足一个恒等式：
+</p>
+
+<div class="formula">β = exp( d′ · c )
+
+证明：d′·c = (zH − zF) · [−½(zH + zF)] = −½(zH² − zF²) = ½(zF² − zH²)     ∎</div>
+
+<p>
+  用源码的 <code>computeStats()</code> 遍历全部 7 × 7 = 49 种可能的 (H, FA) 组合验证，
+  最大偏差 <code>8.9e-16</code>，即浮点误差。这个恒等式是精确成立的。
+</p>
+
+<div class="card warn">
+  <h4>推论：β 同时被 d′ 和 c 决定，只有 c 是跨难度可比的</h4>
+  <p>同样一个「偏保守」的态度（c 相同），在你分辨力更高的时候会表现为更大的 β：</p>
+  <table style="margin:12px 0 6px">
+    <tr><th class="l">判定标准 c</th><th>d′ = 1 时的 β</th><th>d′ = 2 时的 β</th><th>d′ = 3 时的 β</th></tr>
+    <tr><th class="l">+0.5（偏保守）</th><td>1.65</td><td>2.72</td><td>4.48</td></tr>
+    <tr><th class="l">0（中立）</th><td>1.00</td><td>1.00</td><td>1.00</td></tr>
+    <tr><th class="l">−0.5（偏冒进）</th><td>0.61</td><td>0.37</td><td>0.22</td></tr>
+  </table>
+  <p>
+    所以想比较「我今天在简单档和困难档哪个更敢挥」，<b>请比 c，不要比 β</b>。
+    c 是标准分刻度上的绝对位置，与 d′ 无关；β 是似然比刻度，与 d′ 纠缠在一起。
+  </p>
+</div>
+
+<h3>3.5 空发球：β 的专用探针</h3>
+
+<p>
+  每轮 2 个空发球试次，<b>根本没有球</b>，正确答案永远是「不挥」。
+  挥了就是虚报。这是唯一一个<b>与 d′ 完全无关</b>的偏向读数：
+</p>
+
+<ul>
+  <li>对空发球产生 FA ⇒ 你的标准低到了「没信号也挥」的程度。</li>
+  <li>它让 <code>nN = 4 + 2 = 6</code>，使 P(FA) 不完全由真实存在的界外球决定。</li>
+  <li>一个从不挥拍的玩家：P(H) = 0、P(FA) = 0 ⇒ d′ = 0、A′ = 0.5、c = +1.465（极度保守）。
+    结果页会显示 d′=0 而 c 很大——这正是「毫无分辨力、且极度保守」的画像。</li>
+</ul>
+
+<h3>3.6 本作没有收益矩阵 ⇒ 没有「最优 β」</h3>
+
+<div class="card warn">
+  <h4>一个诚实的说明</h4>
+  <p>
+    代码里没有计分：H、M、FA、CR 各记 1 次，<b>没有得失分权重</b>。
+    因此：
+  </p>
+  <ul>
+    <li>数学上的「中立」标准是 <b>c = 0（β = 1）</b>，不是某个最优值。</li>
+    <li>结果页文案里的「漏报就是直接丢分」「挥空」是<em>叙事</em>，不参与任何计算。</li>
+    <li>如果要做真正的「最优决策」教学，需要引入收益矩阵（击中收益 V、虚报代价 K 等），
+      此时最优标准为 <code>β_opt = P(N)/P(S) × (V_CR + V_FA) / (V_H + V_M)</code>。
+      本作有意省略了这一层。</li>
+  </ul>
+</div>
+
+<h3>3.7 结果页把 β 和 d′ 翻译成了什么汉字</h3>
+
+<p>先看 <b>d′</b> 的档位：</p>
+
+<table>
+  <tr><th class="l">d′ 区间</th><th class="l">文案</th></tr>
+  <tr><td class="l">d′ &lt; 0.6</td><td class="l">几乎分不出界内界外</td></tr>
+  <tr><td class="l">0.6 ≤ d′ &lt; 1.5</td><td class="l">有一定分辨力</td></tr>
+  <tr><td class="l">1.5 ≤ d′ &lt; 2.5</td><td class="l">分辨力不错</td></tr>
+  <tr><td class="l">d′ ≥ 2.5</td><td class="l">分辨力相当强</td></tr>
+</table>
+
+<p>再看 <b>偏向</b>——注意这里判的是 <b>c</b> 而不是 β：</p>
+
+<table>
+  <tr><th class="l">c 区间</th><th class="l">文案</th></tr>
+  <tr><td class="l">c &lt; −0.15</td><td class="l">偏<em>冒进</em>——你倾向于挥拍，代价是虚报多</td></tr>
+  <tr><td class="l">−0.15 ≤ c ≤ +0.15</td><td class="l">比较<em>中性</em>——不怎么偏</td></tr>
+  <tr><td class="l">c &gt; +0.15</td><td class="l">偏<em>保守</em>——你宁可放掉也不挥空，代价是漏报多</td></tr>
+</table>
+
+<p>
+  最后按顺序追加一句建议，<b>只看第一条命中的</b>（源码里的 if / else if 链）：
+</p>
+
+<table>
+  <tr><th class="l">序</th><th class="l">触发条件</th><th class="l">追加文案</th></tr>
+  <tr><td>1</td><td class="l">P(H) &gt; 0.9 且 P(FA) &lt; 0.1</td><td class="l">又准又稳，这轮打得很干净</td></tr>
+  <tr><td>2</td><td class="l">P(FA) &gt; 0.5</td><td class="l">虚报偏多：下次先看清球有没有发出来、过没过底线</td></tr>
+  <tr><td>3</td><td class="l">P(H) &lt; 0.5</td><td class="l">漏报偏多：判断「可能进」时不妨打</td></tr>
+  <tr><td>4</td><td class="l">其余</td><td class="l">这个偏向配上你的 d′，就是你在本轮里的最优策略</td></tr>
+</table>
+
+<div class="card warn">
+  <h4>第 4 条文案与 3.6 节有张力</h4>
+  <p>
+    「最优策略」这个说法隐含了某个收益结构，但代码里并没有收益矩阵。
+    更严谨的表述是：「在无记分的前提下，你这一轮采用的偏向是自洽的」。
+    如果这是要给别人看的教学演示，建议把这条文案改掉，或明确加上收益假设。
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="n">4</span>简单 / 普通 / 困难逐项对比</h2>
+
+<h3>4.1 汇总表</h3>
+
+<table>
+  <caption>上半为源码参数，下半为复算所得的派生量</caption>
+  <tr><th class="l">项目</th><th>简单 easy</th><th>普通 normal</th><th>困难 hard</th></tr>
+  <tr><td class="l" colspan="4" style="background:rgba(255,255,255,.05);opacity:.65;font-size:12px;letter-spacing:1px">源代码参数　<code>DIFF</code></td></tr>
+  <tr><td class="l"><code>clearBias</code> 明显球概率</td><td class="dg">0.85</td><td>0.55</td><td class="db">0.20</td></tr>
+  <tr><td class="l"><code>noise</code> 抖动基准</td><td class="dg">0.75</td><td>1.35</td><td class="db">2.30</td></tr>
+  <tr><td class="l"><code>T</code> 飞行时长 (s)</td><td class="dg">1.95</td><td>1.75</td><td class="db">1.45</td></tr>
+  <tr><td class="l"><code>ballA</code> 球不透明度</td><td>1.00</td><td>1.00</td><td class="db">0.92</td></tr>
+  <tr><td class="l" colspan="4" style="background:rgba(255,255,255,.05);opacity:.65;font-size:12px;letter-spacing:1px">派生量（实测／复算）</td></tr>
+  <tr><td class="l">球速 sp (m/s)</td><td>≈9.51</td><td>≈10.89</td><td>≈13.56</td></tr>
+  <tr><td class="l">抖动振幅 sig (px)</td><td class="dg">≈2.24</td><td>≈4.45</td><td class="db">≈8.93</td></tr>
+  <tr><td class="l">界内球平均离线</td><td class="dg">2.085 m</td><td>1.551 m</td><td class="db">0.931 m</td></tr>
+  <tr><td class="l">界外球平均离线</td><td class="dg">1.045 m</td><td>0.838 m</td><td class="db">0.594 m</td></tr>
+  <tr><td class="l">明显球实测占比</td><td class="dg">74.5%</td><td>48.8%</td><td class="db">18.9%</td></tr>
+  <tr><td class="l">期望 d′（σ = 1.0 m 的玩家）</td><td class="dg">≈2.4</td><td>≈1.8</td><td class="db">≈1.3</td></tr>
+  <tr><td class="l">打 d′=1.5 所容忍的 σ</td><td class="dg">2.02 m</td><td>1.37 m</td><td class="db">0.80 m</td></tr>
+</table>
+
+<h3>4.2 一句话概括每一档</h3>
+
+<div class="card">
+  <h4 style="color:#5ee38a">简单 easy　—— 教学档</h4>
+  <p>
+    85% 的球明显离线（界内平均离线 2.1 m），抖动只有 2.2 px，给你 1.95 s。
+    普通玩家也能打出 <b>d′ &gt; 2</b>，第一次接触 SDT 时容易建立「界内 / 界外确实分得开」的直觉。
+  </p>
+</div>
+
+<div class="card">
+  <h4 style="color:#ffd166">普通 normal　—— 默认档</h4>
+  <p>
+    一半明显一半贴线，抖动 4.5 px，1.75 s。σ = 1.0 的玩家 d′ ≈ 1.8，
+    落在「分辨力不错」的区间下沿。<b>结果页默认选中这一档</b>。
+  </p>
+</div>
+
+<div class="card">
+  <h4 style="color:#ff8fa3">困难 hard　—— 逼近阈限</h4>
+  <p>
+    只有 24% 的球明显，<b>80% 的球离线不到 1.1 m</b>，抖动 8.9 px（简单档的 4 倍），只有 1.45 s。
+    σ = 1.0 的玩家 d′ ≈ 1.3，几乎贴到「有一定分辨力」的下限。
+    真正能拉开差距的是那些贴线的球——它们要求你从一团抖动的像素里挤出落点估计。
+  </p>
+</div>
+
+<h3>4.3 单调性验证</h3>
+
+<p>
+  三档的难度顺序在数学上是否严格单调？用同一观察者（σ = 1.0 m，空发球 25% 误报）
+  在游戏真实的 <code>buildTrials()</code> 上各跑 3000 轮：
+</p>
+
+<table>
+  <caption>逐轮 d′ 的均值 —— 同一个玩家，只换难度</caption>
+  <tr><th class="l">难度</th><th>逐轮 d′ 均值</th><th>逐轮 d′ 标准差</th><th>3000 轮汇总后的 d′</th><th>单轮最好 / 最差</th></tr>
+  <tr><th class="l">简单</th><td class="dg">2.08</td><td>0.55</td><td class="dg">2.37</td><td>2.93 / 0.00</td></tr>
+  <tr><th class="l">普通</th><td>1.75</td><td>0.63</td><td>1.80</td><td>2.93 / −0.86</td></tr>
+  <tr><th class="l">困难</th><td class="db">1.35</td><td>0.71</td><td class="db">1.29</td><td>2.93 / −1.47</td></tr>
+</table>
+
+<p>
+  <b>严格单调（简单 &gt; 普通 &gt; 困难），且在任何 σ 下都成立。</b>
+</p>
+
+<div class="card warn">
+  <h4>顺带发现：项目自带的冒烟测试有一条会偶发失败</h4>
+  <p>
+    <code>_smoketest.js</code> 第 8 节用同一个模拟玩家每种难度只跑 20 轮，
+    再断言「普通 d′ &gt; 困难 d′」。这条断言在小样本下会随机翻车——实测就翻了一次
+    （普通 1.34 &lt; 困难 1.57）。
+  </p>
+  <p>原因是 20 轮累计的 d′ 抽样波动很大，三档的分布区间互相重叠（σ = 1.0 时，400 次重复实验）：</p>
+  <table style="margin-top:10px">
+    <tr><th class="l">难度</th><th>5% 分位</th><th>中位数</th><th>95% 分位</th></tr>
+    <tr><th class="l">简单</th><td>2.08</td><td>2.42</td><td>2.84</td></tr>
+    <tr><th class="l">普通</th><td>1.52</td><td>1.80</td><td>2.11</td></tr>
+    <tr><th class="l">困难</th><td>1.03</td><td>1.31</td><td>1.61</td></tr>
+  </table>
+  <p style="margin-top:10px">
+    普通档的 5% 分位（1.52）低于困难档的 95% 分位（1.61），所以「困难反超普通」大约有
+    <b>2%~3%</b> 的概率发生。<b>这不是游戏的问题，是测试的样本量不够</b>。
+    修法：把 <code>ROUNDS</code> 从 20 提到 300 以上，或改成断言「三档均值」而非单次累计值。
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="n">5</span>结果页读数参考表</h2>
+
+<p>
+  12 球设计（nS = nN = 6）下，<b>全部 49 种可能的 (H, FA) 组合</b>对应的 d′ 与 β。
+  拿来对表，就知道自己那一轮的成绩处于什么位置。
+</p>
+
+<table style="font-size:12.5px">
+  <caption>每格 = <b>d′</b> / β　　行 = 击中数 H（满分 6）　列 = 虚报数 FA（满分 6）</caption>
+  <tr>
+    <th class="l" style="width:9%">H \ FA</th>
+    <th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th>
+  </tr>
+  <tr><th>0</th>
+    <td class="dn">0.00 / 1.00</td><td class="db">−0.67 / 0.47</td><td class="db">−1.10 / 0.37</td><td class="db">−1.47 / 0.34</td><td class="db">−1.83 / 0.37</td><td class="db">−2.26 / 0.47</td><td class="db">−2.93 / 1.00</td></tr>
+  <tr><th>1</th>
+    <td>0.67 / 2.14</td><td class="dn">0.00 / 1.00</td><td class="db">−0.54 / 0.69</td><td class="db">−0.97 / 0.63</td><td class="db">−1.40 / 0.69</td><td class="db">−1.93 / 1.00</td><td class="db">−2.26 / 2.14</td></tr>
+  <tr><th>2</th>
+    <td>1.10 / 2.74</td><td>0.54 / 1.46</td><td class="dn">0.00 / 1.00</td><td class="db">−0.43 / 0.91</td><td class="db">−0.86 / 1.00</td><td class="db">−1.40 / 1.46</td><td class="db">−1.83 / 2.74</td></tr>
+  <tr><th>3</th>
+    <td>1.47 / 2.93</td><td>0.97 / 1.60</td><td>0.43 / 1.10</td><td class="dn">0.00 / 1.00</td><td class="db">−0.43 / 1.10</td><td class="db">−0.97 / 1.60</td><td class="db">−1.47 / 2.93</td></tr>
+  <tr><th>4</th>
+    <td>1.83 / 2.74</td><td>1.40 / 1.46</td><td>0.86 / 1.00</td><td>0.43 / 0.91</td><td class="dn">0.00 / 1.00</td><td class="db">−0.54 / 1.46</td><td class="db">−1.10 / 2.74</td></tr>
+  <tr><th>5</th>
+    <td class="dg">2.26 / 2.14</td><td>1.93 / 1.00</td><td>1.40 / 0.69</td><td>0.97 / 0.63</td><td>0.54 / 0.69</td><td class="dn">0.00 / 1.00</td><td class="db">−0.67 / 2.14</td></tr>
+  <tr><th>6</th>
+    <td class="dg">2.93 / 1.00</td><td class="dg">2.26 / 0.47</td><td class="dg">1.83 / 0.37</td><td class="dg">1.47 / 0.34</td><td class="dg">1.10 / 0.37</td><td class="dg">0.67 / 0.47</td><td class="dn">0.00 / 1.00</td></tr>
+</table>
+
+<p>
+  注意对角线上（H = FA）d′ 恒为 0 —— 击中率和虚报率相同就是瞎猜，无论绝对水平多高。
+  而 <b>β 在对角线上恒为 1</b>：d′ = 0 时 <code>β = exp(0·c) = 1</code>，偏向无从谈起的数学体现。
+</p>
+
+<h3>5.1 十二球的精度警告</h3>
+
+<div class="card warn">
+  <h4>单轮 d′ 的噪声有多大</h4>
+  <p>
+    12 个信号 + 12 个噪音的样本量很小。实测（σ = 1.0 的固定玩家，3000 轮）：
+    逐轮 d′ 的标准差约 <b>0.55 ~ 0.71</b>。
+  </p>
+  <p>
+    也就是说：<b>两轮之间 d′ 差 0.5，完全说明不了任何问题</b>。
+    要看到真实的难度效应或进步，至少需要看 10 轮以上的平均，或者干脆把
+    <code>NTRIAL</code> 从 12 提到 40+。
+  </p>
+  <p>
+    另一个坑：<b>逐轮 d′ 的均值 ≠ 汇总比例的 d′</b>。
+    因为 d′ 是比例的非线性函数，先算 d′ 再平均会偏低（简单档实测 2.08 vs 汇总值 2.37）。
+    结果页给的是<em>单轮</em> d′，天生有偏且噪声大——这一点在教学时值得挑明。
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="n">6</span>实现细节与已知坑</h2>
+
+<table>
+  <tr><th class="l" style="width:26%">项</th><th class="l">说明</th></tr>
+  <tr>
+    <td class="l">抖动不随景深缩放</td>
+    <td class="l"><code>jx/jy</code> 以像素为单位直接加到投影坐标上，而球的像素半径 ∝ 1/景深。
+      结果远处的球相对抖动更大。属实现副作用（见 2.3 节旋钮 ②）。</td>
+  </tr>
+  <tr>
+    <td class="l">空发球的 <code>landZ</code> 是死代码</td>
+    <td class="l"><code>buildTrials()</code> 给 <code>type==='none'</code> 也算了一个
+      <code>landZ = BN + U(0.6, 2.4)</code>，但空发球从不调用 <code>launchShot()</code>，这个值不会被使用。无害。</td>
+  </tr>
+  <tr>
+    <td class="l">抢拍缓冲窗</td>
+    <td class="l">预备期最后 <b>0.33 s</b>（<code>preT &gt; 0.42</code>）内按下的键会被缓存，
+      在发球瞬间自动生效；更早按下则忽略，避免误触。三档一致。</td>
+  </tr>
+  <tr>
+    <td class="l">判定按底线中心线</td>
+    <td class="l">标准是 <code>landZ &gt; BN</code>，用的是底线中心，
+      <b>不按线宽（7 cm）做补偿</b>。不过生成器保证所有球至少离线 5 cm / 6 cm，
+      所以「压线球」在实际游戏中不会出现，这个歧义碰不到。</td>
+  </tr>
+  <tr>
+    <td class="l">横向落点范围偏窄</td>
+    <td class="l"><code>landX ∈ [−3.2, 3.2]</code>，比单打边线（±4.115）窄不少，
+      所以球总是落在场地中段。视觉上略显单调，但不影响 SDT 结构。</td>
+  </tr>
+  <tr>
+    <td class="l">冒烟测试第 8 项 flaky</td>
+    <td class="l">20 轮样本量不足以稳定判定「普通 &gt; 困难」。见 4.3 节。</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="n">7</span>备忘卡</h2>
+
+<div class="card key">
+  <h4>关于 d′</h4>
+  <ul>
+    <li>界内 / 界外落点分布<b>不重叠</b>（最小离线 5 cm / 6 cm）⇒ 完美观察者 d′ = ∞。</li>
+    <li>d′ 的高低 <b>≈ 离线距离 ÷ 知觉噪声</b>。</li>
+    <li>四个旋钮：<code>clearBias</code>（离线多远）、<code>noise</code>（抖多少）、
+      <code>T</code>（窗多长，且耦合放大抖动）、<code>ballA</code>（球多亮）。</li>
+    <li>同一玩家换难度，d′ 就变 ⇒ d′ 是「你 + 难度」的联合量。</li>
+    <li>单轮 d′ 被 0.5 校正夹在 <b>[−2.93, +2.93]</b>；2.93 = 全对。</li>
+    <li>单轮 d′ 的抽样噪声 ≈ ±0.6，别拿两轮比较。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <h4>关于 β 和 c</h4>
+  <ul>
+    <li>β 不是游戏设的，是你按出来的。d′ 是自变量，β 是因变量。</li>
+    <li><b>β = exp(d′ · c)</b>，精确成立（49 格验证，误差 8.9e-16）。</li>
+    <li>因此 β 跨难度<b>不可比</b>；要比较自己的偏向，<b>看 c</b>。</li>
+    <li>ROC 图：<b>曲线离对角线多远 = d′；点在曲线上滑到哪 = β</b>。</li>
+    <li>空发球试次是 β 的专用探针（无球也挥 = 标准太低）。</li>
+    <li>没有收益矩阵 ⇒ 不存在「最优 β」，c = 0 只是中立。</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <h4>三档一句话</h4>
+  <ul>
+    <li><b>简单</b>：明显球 86%，抖动 2.2 px，1.95 s ⇒ 期望 d′ ≈ 2.4（σ=1.0 时）</li>
+    <li><b>普通</b>：明显球 57%，抖动 4.5 px，1.75 s ⇒ 期望 d′ ≈ 1.8</li>
+    <li><b>困难</b>：明显球 24%，抖动 8.9 px，1.45 s ⇒ 期望 d′ ≈ 1.3</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>
