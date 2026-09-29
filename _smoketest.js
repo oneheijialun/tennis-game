@@ -1,6 +1,6 @@
 // 无头冒烟测试：桩掉 DOM/Canvas，加载游戏脚本，验证渲染路径与 SDT 计算
 const fs = require('fs');
-const path = 'D:\\AI_Workspace\\信号检测论 网球游戏\\信号检测论-网球.html';
+const path = require('path').join(__dirname, 'index.html');
 const html = fs.readFileSync(path, 'utf8');
 const js = /<script>([\s\S]*?)<\/script>/.exec(html)[1];
 

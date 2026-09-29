@@ -1,6 +1,7 @@
 // 校验：把实际试次的落点投影到屏幕，看是否与「近端底线在 80% 屏高」自洽
-const fs=require('fs');
-const html=fs.readFileSync('D:\\AI_Workspace\\信号检测论 网球游戏\\信号检测论-网球.html','utf8');
+// 路径相对本文件，别写绝对路径：目录名和文件名都不该出现在代码里
+const fs=require('fs'), nodePath=require('path');
+const html=fs.readFileSync(nodePath.join(__dirname,'index.html'),'utf8');
 const js=/<script>([\s\S]*?)<\/script>/.exec(html)[1];
 const grad={addColorStop(){}};
 function mkCtx(){const c={};for(const k of ['setTransform','clearRect','fillRect','beginPath','moveTo','lineTo','closePath','fill','stroke','arc','ellipse','arcTo','roundRect','save','restore','translate','rotate','fillText','strokeText','clip','setLineDash'])c[k]=()=>{};c.createLinearGradient=()=>grad;c.createRadialGradient=()=>grad;c.measureText=()=>({width:10});return c;}

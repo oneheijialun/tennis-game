@@ -1,8 +1,9 @@
-// 无头校验：桩掉 DOM，加载概念实验室的脚本，验证数学、恒等式、模拟机制与 SVG 几何
+﻿// 无头校验：桩掉 DOM，加载概念实验室的脚本，验证数学、恒等式、模拟机制与 SVG 几何
 // 用法：node _labcheck.js
 const fs = require('fs');
-const path = 'D:\\AI_Workspace\\信号检测论 网球游戏\\信号检测论-网球-概念实验室.html';
-const html = fs.readFileSync(path, 'utf8');
+const path = require('path');
+const LAB = path.join(__dirname, 'concept-lab.html');
+const html = fs.readFileSync(LAB, 'utf8');
 const m = /<script>([\s\S]*?)<\/script>/.exec(html);
 if (!m) { console.error('未找到 <script> 块'); process.exit(1); }
 const js = m[1];
@@ -49,7 +50,7 @@ global.AudioContext = undefined;
 // 再把游戏脚本也加载进来，为的是第 12 组能对着真实的 labURL() 做端到端校验。
 // 两个脚本共享同一份桩全局，互不干扰：实验室跳过 init，游戏跑到 resize() 就停在
 // requestAnimationFrame(loop)，帧循环由下面的测试手动驱动。
-const gamePath = 'D:\\AI_Workspace\\信号检测论 网球游戏\\信号检测论-网球.html';
+const gamePath = path.join(__dirname, 'index.html');
 const gameHtml = fs.readFileSync(gamePath,'utf8');
 const gameJs = /<script>([\s\S]*?)<\/script>/.exec(gameHtml)[1];
 (0, eval)(gameJs + '\n;globalThis.__game = {G, labURL, BN, startGame, swing, gauss, computeStats};');
@@ -564,14 +565,45 @@ console.log('\n== 13. 页面自洽（防止 HTML 里的写死值与脚本脱节�
   // 少了任何一处，学生就从游戏走不进实验室，而这是整条链最容易被重构碰掉的一环。
   ok('游戏开始页有进实验室的链接（#labLink）', /id="labLink"/.test(gameHtml));
   ok('游戏结果页有进实验室的按钮（#btnLab）', /id="btnLab"/.test(gameHtml));
-  ok('两个入口都指向实验室这个文件名',
-     (gameHtml.match(/概念实验室\.html/g)||[]).length >= 1
-     && /LAB_FILE\s*=\s*'信号检测论-网球-概念实验室\.html'/.test(gameJs));
+  const labFile = /LAB_FILE\s*=\s*'([^']+)'/.exec(gameJs);
+  ok('LAB_FILE 是 ASCII 名，且那个文件真的在',
+     !!labFile && !/[\u4e00-\u9fff]/.test(labFile[1]) && fs.existsSync(path.join(__dirname, labFile[1])),
+     labFile ? labFile[1] : '没找到 LAB_FILE');
   ok('结果页每次渲染都重写 href（把这一轮的数据带上）',
      /wireLabLinks\s*\(\s*\)\s*;/.test(gameJs)
      && (gameJs.match(/wireLabLinks\s*\(\s*\)\s*;/g)||[]).length >= 2);
   ok('按钮带的是这一轮的数据，开始页那条不带',
      /labURL\(true\)/.test(gameJs) && /labURL\(false\)/.test(gameJs));
+
+  // ---- 文件名 ASCII 化：中文文件名在 GitHub Pages 上会 404 ----
+  // 把「内部跳转只用 ASCII 文件名」变成持续约束，而不是部署前手工扫一遍。
+  const PAGES = ['index.html','concept-lab.html','end-details.html'];
+  const pageSrc = {};
+  for (const f of PAGES) pageSrc[f] = fs.readFileSync(path.join(__dirname, f), 'utf8');
+  const localRefs = src => [...src.matchAll(/(?:href|src)\s*=\s*"([^"]*)"/g)]
+    .map(x => x[1]).filter(v => !/^(?:data:|#|https?:|mailto:|javascript:)/.test(v));
+
+  const cjkRefs = [];
+  for (const f of PAGES)
+    for (const v of localRefs(pageSrc[f]))
+      if (/[\u4e00-\u9fff]/.test(v)) cjkRefs.push(`${f} → ${v}`);
+  for (const v of [...pageSrc['index.html'].matchAll(/LAB_FILE\s*=\s*'([^']*)'/g)].map(x => x[1]))
+    if (/[\u4e00-\u9fff]/.test(v)) cjkRefs.push(`index.html LAB_FILE → ${v}`);
+  ok('所有内部跳转里都没有中文文件名', cjkRefs.length === 0, cjkRefs.join(' | '));
+
+  const dangling = [];
+  for (const f of PAGES)
+    for (const v of localRefs(pageSrc[f])){
+      const target = v.split('#')[0].split('?')[0];
+      if (target && !fs.existsSync(path.join(__dirname, target))) dangling.push(`${f} → ${v}`);
+    }
+  ok('每个本地跳转都指向真实存在的文件（没有指错的死链）',
+     dangling.length === 0, dangling.join(' | '));
+
+  ok('目录里不再有中文名的资源文件', (() => {
+    const cjkFiles = fs.readdirSync(__dirname).filter(n => /[\u4e00-\u9fff]/.test(n));
+    return cjkFiles.length === 0;
+  })(), fs.readdirSync(__dirname).filter(n => /[\u4e00-\u9fff]/.test(n)).join(' | '));
 }
 
 console.log(`\n${'='.repeat(52)}`);

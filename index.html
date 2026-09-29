@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>信号检测论 · 网球</title>
+<meta name="description" content="一款第一视角击球小游戏：在球落地前预判界内/界外并决定是否挥拍，赛后自动统计 H / M / FA / CR 与 d′、β、c、A′ 等信号检测论指标。">
+<meta property="og:title" content="信号检测论 · 网球">
+<meta property="og:description" content="在球落地前预判界内/界外，赛后自动给出你的 d′、β、c、A′。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23d9f227'/%3E%3Cpath d='M4 9.5c9 3.5 9 16 0 19.5M28 9.5c-9 3.5-9 16 0 19.5' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;background:#0d0d16;}
+  body{
+    display:flex;align-items:center;justify-content:center;
+    font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,sans-serif;
+    color:#fff;-webkit-user-select:none;user-select:none;
+  }
+  #stage{
+    position:relative;width:100vw;height:56.25vw;max-height:100vh;max-width:177.78vh;
+    overflow:hidden;background:#1a1a2e;box-shadow:0 0 60px rgba(0,0,0,.8);
+  }
+  canvas#game{display:block;width:100%;height:100%;}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute;inset:0;pointer-events:none;}
+  .panel{
+    position:absolute;background:rgba(14,14,28,.62);border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;backdrop-filter:blur(6px);padding:8px 12px;font-size:13px;line-height:1.5;
+  }
+  #hudLeft{top:14px;left:14px;}
+  #hudLeft .big{font-size:20px;font-weight:700;letter-spacing:.5px;}
+  #hudLeft .sub{opacity:.6;font-size:11px;}
+  #hudRight{top:14px;right:14px;min-width:150px;}
+  #hudRight .row{display:flex;justify-content:space-between;gap:14px;}
+  #hudRight .k{opacity:.72;}
+  #hudRight .v{font-weight:700;font-variant-numeric:tabular-nums;}
+  .cH{color:#5ee38a}.cM{color:#ffb454}.cF{color:#ff6b81}.cR{color:#63b8ff}
+
+  /* ---------- 判定提示 ---------- */
+  #toast{
+    position:absolute;left:50%;top:22%;transform:translate(-50%,-50%) scale(.9);
+    padding:10px 22px;border-radius:12px;font-size:22px;font-weight:800;letter-spacing:1px;
+    opacity:0;transition:opacity .16s,transform .16s;white-space:nowrap;text-align:center;
+  }
+  #toast .sub{display:block;font-size:12px;font-weight:400;letter-spacing:0;opacity:.85;margin-top:4px;}
+  #toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+
+  /* ---------- 全屏面板 ---------- */
+  .screen{
+    position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,rgba(10,10,24,.93),rgba(28,16,40,.95));
+    backdrop-filter:blur(3px);padding:3vh 4vw;overflow:auto;
+  }
+  .screen.on{display:flex;}
+  h1{font-size:clamp(22px,3.2vw,40px);letter-spacing:2px;margin-bottom:.4em;}
+  h1 span{color:#ff6b8f;}
+  h2{font-size:clamp(16px,1.7vw,22px);letter-spacing:1px;margin-bottom:12px;opacity:.95;}
+  .lead{font-size:clamp(11px,1.05vw,14px);line-height:1.85;opacity:.82;max-width:820px;text-align:center;margin-bottom:18px;}
+  .lead b{color:#ffd166;}
+
+  table.matrix{border-collapse:collapse;margin:0 auto 16px;font-size:clamp(10px,1vw,14px);}
+  table.matrix th,table.matrix td{border:1px solid rgba(255,255,255,.2);padding:7px 13px;text-align:center;}
+  table.matrix th{background:rgba(255,255,255,.08);font-weight:600;}
+  table.matrix td.hit{background:rgba(94,227,138,.14)}
+  table.matrix td.miss{background:rgba(255,180,84,.14)}
+  table.matrix td.fa{background:rgba(255,107,129,.14)}
+  table.matrix td.cr{background:rgba(99,184,255,.14)}
+  table.matrix td.num{font-size:1.5em;font-weight:800;font-variant-numeric:tabular-nums;}
+  table.matrix td.lbl{font-size:.85em;opacity:.72;line-height:1.3;}
+
+  .btns{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;justify-content:center;}
+  button{
+    font-family:inherit;font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;
+    padding:12px 30px;border-radius:30px;border:none;color:#1a0d16;
+    background:linear-gradient(135deg,#ffd166,#ff8fa3);transition:transform .12s,filter .12s;
+  }
+  button:hover{transform:translateY(-2px);filter:brightness(1.08);}
+  button.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);}
+  /* <a> 拿不到上面 button{…} 的盒模型，所以把同一套样式重写一份给 a.ghost */
+  a.ghost,button.ghost{
+    font-family:inherit;font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;
+    padding:12px 30px;border-radius:30px;border:1px solid rgba(255,255,255,.35);
+    background:transparent;color:#fff;transition:transform .12s,filter .12s;
+    display:inline-block;text-decoration:none;white-space:nowrap;
+  }
+  a.ghost:hover{transform:translateY(-2px);filter:brightness(1.08);}
+  /* 开始页角落的小链接，比按钮更轻 */
+  a.lablink{
+    position:absolute;top:4vh;right:4vw;font-size:13px;letter-spacing:1px;
+    color:rgba(255,255,255,.62);text-decoration:none;
+    border:1px solid rgba(255,255,255,.22);border-radius:20px;padding:6px 16px;
+    transition:.15s;z-index:5;
+  }
+  a.lablink:hover{color:#ffd166;border-color:rgba(255,209,102,.55);}
+  @media (max-width:680px){ a.lablink{top:2vh;right:3vw;font-size:11px;padding:5px 12px;} }
+  .diffs{display:flex;gap:10px;margin:14px 0 20px;}
+  .diff{
+    padding:9px 22px;border-radius:20px;border:1px solid rgba(255,255,255,.25);cursor:pointer;
+    font-size:14px;transition:.15s;
+  }
+  .diff.on{background:rgba(255,209,102,.9);color:#1a0d16;border-color:transparent;font-weight:700;}
+
+  /* ---------- 结果页 ---------- */
+  #resultScreen .wrap{display:flex;gap:2.4vw;align-items:flex-start;flex-wrap:wrap;justify-content:center;}
+  .col{display:flex;flex-direction:column;}
+  .metrics{font-size:clamp(11px,1vw,14px);line-height:1.9;min-width:290px;}
+  .metrics .m{display:flex;justify-content:space-between;gap:20px;border-bottom:1px dashed rgba(255,255,255,.14);padding:3px 0;}
+  .metrics .m span:first-child{opacity:.75;}
+  .metrics .m span:last-child{font-weight:700;font-variant-numeric:tabular-nums;}
+  .metrics .note{font-size:.82em;opacity:.55;line-height:1.6;margin-top:10px;max-width:320px;}
+  #rocBox{background:rgba(255,255,255,.045);border-radius:12px;padding:12px;}
+  #rocTitle{font-size:12px;opacity:.75;text-align:center;margin-bottom:6px;letter-spacing:1px;}
+  #verdict{font-size:clamp(11px,1vw,13.5px);line-height:1.8;opacity:.9;max-width:860px;margin:18px auto 0;text-align:center;}
+  #verdict b{color:#ffd166;}
+  #verdict em{color:#ff8fa3;font-style:normal;font-weight:700;}
+  @media (max-width:820px){
+    .wrap{flex-direction:column;align-items:center;}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="panel" id="hudLeft">
+      <div class="big"><span id="hudTrial">0</span> / 12 <span style="font-size:12px;opacity:.6">球</span></div>
+      <div class="sub" id="hudDiff">普通</div>
+    </div>
+    <div class="panel" id="hudRight">
+      <div class="row"><span class="k cH">击中 H</span><span class="v" id="hH">0</span></div>
+      <div class="row"><span class="k cM">漏报 M</span><span class="v" id="hM">0</span></div>
+      <div class="row"><span class="k cF">虚报 FA</span><span class="v" id="hF">0</span></div>
+      <div class="row"><span class="k cR">正拒 CR</span><span class="v" id="hR">0</span></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- ===== 开始页 ===== -->
+  <div class="screen on" id="startScreen">
+    <a class="lablink" id="labLink" target="_blank" rel="noopener">概念实验室 →</a>
+    <h1>信号检测论 · <span>网球</span></h1>
+    <p class="lead">
+      你是底线后的接球手。对面来球可能<b>落在界内</b>，也可能是<b>界外球</b>，甚至<b>根本没发球</b>。<br>
+      你必须在<b>球落地之前</b>决定挥不挥拍（按空格 / 点击屏幕）。落地之后再挥就来不及了。<br>
+      看不清是常态——球的落点带有视觉噪声，靠近底线的球本来就难以判断。
+    </p>
+    <table class="matrix">
+      <tr>
+        <th style="border:none;background:none"></th>
+        <th>你挥拍了<br><span style="font-weight:400;opacity:.65;font-size:.85em">报告"有信号"</span></th>
+        <th>你没挥拍<br><span style="font-weight:400;opacity:.65;font-size:.85em">报告"无信号"</span></th>
+      </tr>
+      <tr>
+        <th>界内球（信号）</th>
+        <td class="hit"><b class="cH">击中 Hit</b><br><span style="font-size:.8em;opacity:.7">判断正确，打回去</span></td>
+        <td class="miss"><b class="cM">漏报 Miss</b><br><span style="font-size:.8em;opacity:.7">球在界内，却放掉了</span></td>
+      </tr>
+      <tr>
+        <th>界外球 / 没发球（噪音）</th>
+        <td class="fa"><b class="cF">虚报 False Alarm</b><br><span style="font-size:.8em;opacity:.7">不该挥却挥了，挥空</span></td>
+        <td class="cr"><b class="cR">正确拒绝 Correct Rejection</b><br><span style="font-size:.8em;opacity:.7">正确放掉</span></td>
+      </tr>
+    </table>
+    <p class="lead" style="margin-bottom:10px">一轮 <b>12 球</b>，结束后自动统计 H / M / FA / CR，算出 P(H)、P(FA)、d′、β、c、A′。</p>
+    <div class="diffs">
+      <div class="diff" data-d="easy">简单</div>
+      <div class="diff on" data-d="normal">普通</div>
+      <div class="diff" data-d="hard">困难</div>
+    </div>
+    <div class="btns"><button id="btnStart">开 始 比 赛</button></div>
+  </div>
+
+  <!-- ===== 结果页 ===== -->
+  <div class="screen" id="resultScreen">
+    <h2 id="resTitle">本 轮 结 果</h2>
+    <div class="wrap">
+      <div class="col">
+        <table class="matrix" id="resMatrix"></table>
+      </div>
+      <div class="col">
+        <div class="metrics" id="resMetrics"></div>
+      </div>
+      <div class="col">
+        <div id="rocBox"><div id="rocTitle">ROC 曲线</div><canvas id="roc" width="260" height="260"></canvas></div>
+      </div>
+    </div>
+    <div id="verdict"></div>
+    <div class="btns" style="margin-top:18px">
+      <button id="btnAgain">再 来 一 轮</button>
+      <button class="ghost" id="btnHome">返 回 说 明</button>
+      <a class="ghost" id="btnLab" target="_blank" rel="noopener"
+         title="把这一轮的 H/M/FA/CR 和 12 个球的落点带过去">进 入 概 念 实 验 室 →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   信号检测论 · 网球  —  单文件 HTML 游戏
+   2x2 判定：信号=界内球 / 噪音=界外球或无球 ; 反应=挥拍 / 不挥拍
+   ========================================================================= */
+
+/* ---------------------------------------------------------------
+   0. 通用数学工具
+   --------------------------------------------------------------- */
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const rand =(a,b)=>a+Math.random()*(b-a);
+const lerp =(a,b,t)=>a+(b-a)*t;
+const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
+
+// 标准正态 CDF（Abramowitz-Stegun 7.1.26）
+function erf(x){
+  const s=x<0?-1:1; x=Math.abs(x);
+  const t=1/(1+0.3275911*x);
+  const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);
+  return s*y;
+}
+const Phi = z => 0.5*(1+erf(z/Math.SQRT2));
+
+// 标准正态逆函数（Acklam 算法）
+function zInv(p){
+  if(p<=0)return -Infinity; if(p>=1)return Infinity;
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  const pl=0.02425, ph=1-pl; let q,r;
+  if(p<pl){ q=Math.sqrt(-2*Math.log(p));
+    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+  if(p<=ph){ q=p-0.5; r=q*q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1); }
+  q=Math.sqrt(-2*Math.log(1-p));
+  return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+
+/* ---------------------------------------------------------------
+   1. 画布 / 相机 / 三维投影
+   --------------------------------------------------------------- */
+const stage=document.getElementById('stage');
+const cvs  =document.getElementById('game');
+const ctx  =cvs.getContext('2d');
+let W=0,H=0,DPR=1,FOC=1,CX=0,CY=0;
+
+// 相机由 16:9 反解：近底线落在 80% 屏高、两侧各留 15% 空白（对齐参考图的构图）
+const CAM_Y=7.91, CAM_Z=-22.59, PITCH=25*Math.PI/180;
+const SINP=Math.sin(PITCH), COSP=Math.cos(PITCH);
+
+// 世界坐标：x 左右(+右)  y 高度  z 纵深(+远处)
+// 网在 z=0，近端底线 z=-11.885，远端底线 z=+11.885
+function proj(x,y,z){
+  const dy=y-CAM_Y, dz=z-CAM_Z;
+  const depth = dy*(-SINP) + dz*COSP;
+  const hgt   = dy*COSP   + dz*SINP;
+  if(depth<0.35) return null;
+  return { x: CX + FOC*x/depth, y: CY - FOC*hgt/depth, d: depth };
+}
+
+function resize(){
+  const r=stage.getBoundingClientRect();
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=Math.max(320,Math.round(r.width)); H=Math.max(180,Math.round(r.height));
+  cvs.width=Math.round(W*DPR); cvs.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  FOC = W/(2*Math.tan(31*Math.PI/180));   // 水平半视角 31°
+  CX=W/2; CY=H/2;
+}
+window.addEventListener('resize',resize);
+
+/* ---------------------------------------------------------------
+   2. 场地常量 / 配色（取自参考图：粉场 + 深蓝紫场外 + 绿柱球网）
+   --------------------------------------------------------------- */
+const HLW_D=5.485, HLW_S=4.115, BN=-11.885, BF=11.885, SVC=6.40;
+const LINE_W=0.07, BALL_R=0.115;
+const C={
+  skyTop:'#eaf4fb', skyBot:'#fdf3e3',
+  tree:'#5c9a63', treeD:'#3f7248',
+  wall:'#6b7ba8', wallD:'#4a5578',
+  out1:'#5a5f8c', out2:'#3a3d63',      // 场外
+  court1:'#f4778f', court2:'#e5567a',  // 场内(粉)
+  line:'rgba(255,255,255,.95)',
+  post:'#2a6040', net:'rgba(248,251,255,.34)',
+  tape:'#ffffff'
+};
+
+/* ---------------------------------------------------------------
+   3. 绘制：背景 / 场地 / 球网
+   --------------------------------------------------------------- */
+function groundQuad(p1,p2,p3,p4,fill){
+  const a=proj(p1[0],0,p1[1]), b=proj(p2[0],0,p2[1]), c=proj(p3[0],0,p3[1]), d=proj(p4[0],0,p4[1]);
+  if(!a||!b||!c||!d) return;
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(c.x,c.y); ctx.lineTo(d.x,d.y);
+  ctx.closePath(); ctx.fillStyle=fill; ctx.fill();
+}
+// 沿 z 方向的线（固定 x）
+const lineX=(x,z1,z2)=>groundQuad([x-LINE_W/2,z1],[x+LINE_W/2,z1],[x+LINE_W/2,z2],[x-LINE_W/2,z2],C.line);
+// 沿 x 方向的线（固定 z）
+const lineZ=(z,x1,x2)=>groundQuad([x1,z-LINE_W/2],[x2,z-LINE_W/2],[x2,z+LINE_W/2],[x1,z+LINE_W/2],C.line);
+
+function drawBackdrop(){
+  // 远处地面线：地面平面上 z 为常数时投影是水平线，故可用屏幕横带
+  const gBase = proj(0,0,13);
+  if(!gBase){ ctx.fillStyle=C.out2; ctx.fillRect(0,0,W,H); return; }
+  const yBase=gBase.y;                       // 围墙根 = z=13 的地面线
+  const yTreeTop = yBase*0.30;               // 天空/树/墙三段按比例分，保证天空始终可见
+  const yWallTop = yBase*0.60;
+  // 天空
+  let g=ctx.createLinearGradient(0,0,0,yTreeTop);
+  g.addColorStop(0,C.skyTop); g.addColorStop(1,C.skyBot);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,yTreeTop);
+  // 树带
+  g=ctx.createLinearGradient(0,yTreeTop,0,yWallTop);
+  g.addColorStop(0,C.tree); g.addColorStop(1,C.treeD);
+  ctx.fillStyle=g; ctx.fillRect(0,yTreeTop,W,yWallTop-yTreeTop);
+  const bandH=yWallTop-yTreeTop;
+  for(let i=0;i<30;i++){
+    const x=(i/29)*W*1.12-W*0.06, r=bandH*(0.30+((i*37)%13)/13*0.26);
+    ctx.beginPath(); ctx.arc(x,yTreeTop+r*0.30,r,Math.PI,0); ctx.fillStyle=C.tree; ctx.fill();
+  }
+  // 围墙壁
+  g=ctx.createLinearGradient(0,yWallTop,0,yBase);
+  g.addColorStop(0,C.wall); g.addColorStop(1,C.wallD);
+  ctx.fillStyle=g; ctx.fillRect(0,yWallTop,W,yBase-yWallTop);
+  ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fillRect(0,yWallTop,W,Math.max(1,H*0.005));
+  // 场外地面
+  g=ctx.createLinearGradient(0,yBase,0,H);
+  g.addColorStop(0,C.out1); g.addColorStop(1,C.out2);
+  ctx.fillStyle=g; ctx.fillRect(0,yBase,W,H-yBase);
+}
+
+function drawCourt(){
+  // 场外一道更亮的内圈，做出球场周围的地面层次
+  groundQuad([-HLW_D-0.9,BF+0.9],[HLW_D+0.9,BF+0.9],[HLW_D+0.9,BN-0.9],[-HLW_D-0.9,BN-0.9],'rgba(150,160,215,.13)');
+  // 球场表面
+  const a=proj(-HLW_D,0,BF), b=proj(HLW_D,0,BF), c=proj(HLW_D,0,BN), d=proj(-HLW_D,0,BN);
+  if(a&&b&&c&&d){
+    const g=ctx.createLinearGradient(0,a.y,0,d.y);
+    g.addColorStop(0,C.court1); g.addColorStop(1,C.court2);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(c.x,c.y); ctx.lineTo(d.x,d.y);
+    ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+  }
+  // 场地线
+  lineX( HLW_D,BF,BN); lineX(-HLW_D,BF,BN);
+  lineX( HLW_S,BF,BN); lineX(-HLW_S,BF,BN);
+  lineZ( BF,-HLW_D,HLW_D); lineZ(BN,-HLW_D,HLW_D);
+  lineZ( SVC,-HLW_S,HLW_S); lineZ(-SVC,-HLW_S,HLW_S);
+  lineX(0,-SVC,SVC);
+}
+
+const netH = x => 0.914 + (1.07-0.914)*Math.pow(Math.min(1,Math.abs(x)/HLW_D),2);
+
+function drawNet(){
+  const X0=-HLW_D-0.16, X1=HLW_D+0.16, NX=40;
+  // 网面
+  ctx.beginPath();
+  for(let i=0;i<=NX;i++){ const x=lerp(X0,X1,i/NX), p=proj(x,netH(x),0); if(p){ i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);} }
+  for(let i=NX;i>=0;i--){ const x=lerp(X0,X1,i/NX), p=proj(x,0,0); if(p) ctx.lineTo(p.x,p.y); }
+  ctx.closePath(); ctx.fillStyle=C.net; ctx.fill();
+  // 网眼
+  ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=1;
+  for(let x=X0;x<=X1;x+=0.20){
+    const a=proj(x,0,0), b=proj(x,netH(x),0);
+    if(a&&b){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+  }
+  for(let y=0.16;y<1.0;y+=0.17){
+    ctx.beginPath(); let st=false;
+    for(let i=0;i<=NX;i++){ const x=lerp(X0,X1,i/NX), p=proj(x,Math.min(y,netH(x)),0);
+      if(p){ st?ctx.lineTo(p.x,p.y):(ctx.moveTo(p.x,p.y),st=true);} }
+    ctx.stroke();
+  }
+  // 顶部白带
+  ctx.beginPath();
+  for(let i=0;i<=NX;i++){ const x=lerp(X0,X1,i/NX), p=proj(x,netH(x),0); if(p){ i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);} }
+  for(let i=NX;i>=0;i--){ const x=lerp(X0,X1,i/NX), p=proj(x,netH(x)-0.055,0); if(p) ctx.lineTo(p.x,p.y); }
+  ctx.closePath(); ctx.fillStyle=C.tape; ctx.fill();
+  // 中带
+  const s1=proj(-0.05,0.914,0), s2=proj(0.05,0.914,0), s3=proj(0.05,0,0), s4=proj(-0.05,0,0);
+  if(s1&&s2&&s3&&s4){ ctx.beginPath(); ctx.moveTo(s1.x,s1.y); ctx.lineTo(s2.x,s2.y); ctx.lineTo(s3.x,s3.y); ctx.lineTo(s4.x,s4.y);
+    ctx.closePath(); ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fill(); }
+  // 网柱
+  [[-HLW_D-0.145],[HLW_D+0.145]].forEach(([px])=>{
+    const t1=proj(px-0.055,1.07,0), t2=proj(px+0.055,1.07,0), t3=proj(px+0.055,0,0), t4=proj(px-0.055,0,0);
+    if(t1&&t2&&t3&&t4){ ctx.beginPath(); ctx.moveTo(t1.x,t1.y); ctx.lineTo(t2.x,t2.y); ctx.lineTo(t3.x,t3.y); ctx.lineTo(t4.x,t4.y);
+      ctx.closePath(); ctx.fillStyle=C.post; ctx.fill(); }
+  });
+}
+
+/* 远处对手（剪影，纯装饰） */
+function drawOpponent(t){
+  const z=8.5, x=Math.sin(t*0.7)*0.35;
+  const bob=Math.abs(Math.sin(t*2.2))*0.035;
+  const feet=proj(x,bob,z), head=proj(x,1.72+bob,z);
+  if(!feet||!head) return;
+  const top=head.y, ft=feet.y, hh=ft-top;          // 全身高（像素）
+  const midX=(feet.x+head.x)/2;
+  const S=hh/1.0;                                   // 以身高为基准的尺度
+  const skin='#e8b98d', shirt='#e05a7a', pants='#2f3a5c', hair='#3a2b22';
+
+  ctx.save();
+  ctx.fillStyle='rgba(20,16,40,.22)';               // 地面投影
+  ctx.beginPath(); ctx.ellipse(feet.x,ft,S*0.16,S*0.05,0,0,7); ctx.fill();
+
+  // 腿
+  ctx.fillStyle=pants;
+  ctx.beginPath(); ctx.roundRect(midX-S*0.115, top+hh*0.60, S*0.095, hh*0.40, S*0.04); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(midX+S*0.020, top+hh*0.60, S*0.095, hh*0.40, S*0.04); ctx.fill();
+  // 鞋
+  ctx.fillStyle='#f2f4f8';
+  ctx.beginPath(); ctx.roundRect(midX-S*0.135, ft-S*0.035, S*0.13, S*0.035, S*0.015); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(midX+S*0.005, ft-S*0.035, S*0.13, S*0.035, S*0.015); ctx.fill();
+  // 上身
+  ctx.fillStyle=shirt;
+  ctx.beginPath(); ctx.roundRect(midX-S*0.145, top+hh*0.26, S*0.29, hh*0.37, S*0.08); ctx.fill();
+  // 手臂（持拍侧抬起）
+  ctx.fillStyle=skin;
+  ctx.beginPath(); ctx.roundRect(midX+S*0.13, top+hh*0.28, S*0.075, hh*0.24, S*0.035); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(midX-S*0.205, top+hh*0.30, S*0.075, hh*0.22, S*0.035); ctx.fill();
+  // 头
+  ctx.fillStyle=skin;
+  ctx.beginPath(); ctx.arc(midX, top+hh*0.115, S*0.105, 0, 7); ctx.fill();
+  ctx.fillStyle=hair;
+  ctx.beginPath(); ctx.arc(midX, top+hh*0.098, S*0.108, Math.PI*0.95, Math.PI*2.05); ctx.fill();
+
+  // 球拍
+  ctx.save(); ctx.translate(midX+S*0.20, top+hh*0.52); ctx.rotate(Math.sin(t*2.2)*0.45-0.35);
+  ctx.strokeStyle='#33374a'; ctx.lineWidth=Math.max(1,S*0.028); ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-S*0.20); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0,-S*0.33, S*0.105, S*0.135, 0,0,7);
+  ctx.strokeStyle='#ffd166'; ctx.lineWidth=Math.max(1,S*0.026); ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=Math.max(1,S*0.008); ctx.stroke();
+  ctx.restore(); ctx.restore();
+}
+
+/* ---------------------------------------------------------------
+   4. 球路：解析抛物线，保证「落地时刻 = 反应窗关闭时刻」
+   --------------------------------------------------------------- */
+// 由 (z0,y0) 飞到 (z1,y1)，在 z=zNet 处高度 yNet，用时 T
+function makeArc(z0,y0,z1,y1,zNet,yNet,T){
+  const q=(zNet-z0)/(z1-z0);
+  const den=T*T*q*(1-q);
+  let g=2*(yNet-y0-q*(y1-y0))/den;
+  if(!isFinite(g)||g<=0.05) g=0.05;
+  const vy=(y1-y0)/T+0.5*g*T;
+  const vz=(z1-z0)/T;
+  return {g,vy,vz};
+}
+// 过网高度（保证不被网挡住）
+const netClear = x => netH(clamp(x,-HLW_D,HLW_D)) + rand(0.30,0.75);
+
+/* ---------------------------------------------------------------
+   5. 难度
+   --------------------------------------------------------------- */
+// clearBias = 抽到"明显球"（落点离线很远）的概率，越大越好判
+const DIFF={
+  easy  :{ name:'简单', T:1.95, noise:0.75, clearBias:0.85, ballA:1.00 },
+  normal:{ name:'普通', T:1.75, noise:1.35, clearBias:0.55, ballA:1.00 },
+  hard  :{ name:'困难', T:1.45, noise:2.30, clearBias:0.20, ballA:0.92 }
+};
+
+/* ---------------------------------------------------------------
+   6. 游戏状态
+   --------------------------------------------------------------- */
+const NTRIAL=12;
+const G={
+  state:'menu', diff:'normal',
+  trials:[], idx:-1, results:{H:0,M:0,FA:0,CR:0},
+  phase:'idle', t:0, preT:0, postT:0, T:1.75,
+  cur:null, responded:false, pressT:-1, swingAnim:0, earlyPress:false,
+  ball:null, mark:null, clock:0, shakeT:0,
+  lastOutcome:null
+};
+
+/* --- 生成 12 个试次 --- */
+function buildTrials(){
+  const list=[];
+  for(let i=0;i<6;i++) list.push('in');        // 信号：界内球
+  for(let i=0;i<4;i++) list.push('out');       // 噪音：界外球
+  for(let i=0;i<2;i++) list.push('none');      // 噪音：没发球（catch trial）
+  for(let i=list.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [list[i],list[j]]=[list[j],list[i]]; }
+  const d=DIFF[G.diff];
+  return list.map(type=>{
+    const landX=rand(-3.2,3.2);
+    let landZ;
+    if(type==='in'){
+      const m=(Math.random()<d.clearBias)? rand(1.10,3.60) : rand(0.05,1.10);
+      landZ=BN+m;                               // 界内：z 比底线更靠近网
+    }else if(type==='out'){
+      const m=(Math.random()<d.clearBias)? rand(0.85,1.45) : rand(0.06,0.85);
+      landZ=BN-m;                               // 界外：z 越过底线
+    }else{
+      landZ=BN+rand(0.6,2.4);
+    }
+    return { type, landX, landZ, responded:false, pressT:-1, outcome:null };
+  });
+}
+
+/* --- 开球：构造信号球的飞行 --- */
+function launchShot(tr){
+  const z0=8.5, y0=1.05;
+  const x0=clamp(tr.landX*0.45+rand(-1.2,1.2),-4.4,4.4);
+  const arc=makeArc(z0,y0,tr.landZ,0, 0, netClear(tr.landX), G.T);
+  G.ball={
+    mode:'fly', t:0, x:x0, y:y0, z:z0,
+    x0, y0, z0,
+    vx:(tr.landX-x0)/G.T, vy:arc.vy, vz:arc.vz, g:arc.g,
+    trail:[], jseed:rand(0,1000)
+  };
+}
+function ballPosAt(t){
+  const b=G.ball;
+  return { x:b.x0+b.vx*t, y:b.y0+b.vy*t-0.5*b.g*t*t, z:b.z0+b.vz*t };
+}
+
+/* ---------------------------------------------------------------
+   7. 流程控制
+   --------------------------------------------------------------- */
+const $=id=>document.getElementById(id);
+function hideScreens(){ $('startScreen').classList.remove('on'); $('resultScreen').classList.remove('on'); }
+function showScreen(id){ $(id).classList.add('on'); }
+
+function startGame(){
+  G.trials=buildTrials();
+  G.idx=-1; G.results={H:0,M:0,FA:0,CR:0};
+  G.clock=0; G.mark=null; G.ball=null;
+  $('hudDiff').textContent=DIFF[G.diff].name;
+  hideScreens(); updateHUD(); nextTrial();
+}
+
+function nextTrial(){
+  G.idx++;
+  if(G.idx>=G.trials.length){ finish(); return; }
+  G.cur=G.trials[G.idx];
+  G.cur.responded=false; G.cur.pressT=-1;
+  G.T=DIFF[G.diff].T;
+  G.phase='pre'; G.preT=0; G.t=0; G.postT=0;
+  G.responded=false; G.pressT=-1; G.swingAnim=0; G.earlyPress=false;
+  G.ball=null; G.mark=null; G.lastOutcome=null;
+  toastHide();
+  updateHUD();
+}
+
+function beginFlight(){
+  G.phase='fly'; G.t=0;
+  if(G.cur.type!=='none') launchShot(G.cur);
+  beep(660,0.05,0.05,'square');       // 发球提示音
+  if(G.earlyPress){ G.earlyPress=false; swing(); }   // 抢拍：预备期按的键不算白按
+}
+
+/* --- 反应：挥拍 --- */
+function swing(){
+  if(G.responded) return;
+  if(G.phase==='pre'){                 // 球还没发出来就按了 → 缓冲到最后半秒
+    if(G.preT > 0.42) G.earlyPress=true;
+    return;
+  }
+  if(G.phase!=='fly') return;
+  if(G.t>=G.T) return;                 // 球已落地，反应窗关闭（不依赖帧序的不变式）
+  G.responded=true; G.pressT=G.t;
+  G.cur.responded=true; G.cur.pressT=G.t;
+  G.swingAnim=1;
+  beep(180,0.09,0.06,'sawtooth');
+}
+
+/* --- 结算一次试次 --- */
+function resolve(){
+  const tr=G.cur;
+  const isSignal = (tr.type==='in');
+  const swung    = tr.responded;
+  let key, zh, color, sub;
+
+  if(isSignal && swung)      { key='H';  color='#5ee38a'; zh='击中 HIT';            sub='界内球 · 你打回去了'; }
+  else if(isSignal && !swung){ key='M';  color='#ffb454'; zh='漏报 MISS';           sub='界内球 · 你放掉了'; }
+  else if(!isSignal&& swung) { key='FA'; color='#ff6b81'; zh='虚报 FALSE ALARM';    sub=(tr.type==='none'?'本轮没发球':'界外球')+' · 你挥空了'; }
+  else                       { key='CR'; color='#63b8ff'; zh='正确拒绝 CORR. REJ.'; sub=(tr.type==='none'?'本轮没发球':'界外球')+' · 你放对了'; }
+
+  G.results[key]++;
+  tr.outcome=key;
+  G.lastOutcome=key;
+  updateHUD();
+  toast(zh, sub, color, key==='H'||key==='CR');
+
+  // 球落地标记
+  if(tr.type!=='none'){
+    const inside = isSignal;
+    const margin = inside ? Math.abs(tr.landZ-BN) : -Math.abs(tr.landZ-BN);
+    G.mark={ x:tr.landX, z:tr.landZ, inside, age:0, margin };
+  }
+
+  // 球之后的走向
+  if(G.ball){
+    const b=G.ball;
+    if(isSignal && swung){
+      // 击中 → 打回对面
+      const p=ballPosAt(G.T);
+      const tx=rand(-3.2,3.2), tz=rand(3.5,8.5);
+      const arc=makeArc(tr.landZ,Math.max(0.55,p.y), tz,0, 0, netClear(tx), 1.85);
+      G.ball={ mode:'return', t:0, x:tr.landX, y:Math.max(0.55,p.y), z:tr.landZ,
+               x0:tr.landX, y0:Math.max(0.55,p.y), z0:tr.landZ,
+               vx:(tx-tr.landX)/1.85, vy:arc.vy, vz:arc.vz, g:arc.g,
+               trail:b.trail, jseed:b.jseed };
+      impact();
+    }else{
+      // 落地反弹后继续飞过身边
+      const p=ballPosAt(G.T);
+      const vyT=b.vy-b.g*G.T;
+      G.ball={ mode:'bounce', t:0, x:tr.landX, y:0, z:tr.landZ,
+               vx:b.vx*0.84, vy:-vyT*0.62, vz:b.vz*0.84, g:b.g,
+               trail:b.trail, jseed:b.jseed };
+      if(isSignal) thud();
+    }
+  }
+  G.phase='post'; G.postT=0;
+}
+
+function finish(){
+  G.phase='done';
+  renderResult();
+  showScreen('resultScreen');
+}
+
+/* ---------------------------------------------------------------
+   8. 输入
+   --------------------------------------------------------------- */
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'||e.key===' '){
+    e.preventDefault();
+    if(G.state==='play') swing();
+  }
+});
+stage.addEventListener('pointerdown',e=>{
+  if(G.state==='play' && !e.target.closest('button') && !e.target.closest('.diff')) swing();
+});
+document.querySelectorAll('.diff').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.diff').forEach(d=>d.classList.remove('on'));
+    el.classList.add('on'); G.diff=el.dataset.d;
+    $('hudDiff').textContent=DIFF[G.diff].name;
+  });
+});
+$('btnStart').addEventListener('click',()=>{ G.state='play'; startGame(); });
+$('btnAgain').addEventListener('click',()=>{ startGame(); });
+$('btnHome').addEventListener('click',()=>{ G.state='menu'; G.phase='idle'; G.ball=null; G.mark=null;
+  $('resultScreen').classList.remove('on'); showScreen('startScreen'); });
+
+/* ---------------------------------------------------------------
+   9. HUD / 提示
+   --------------------------------------------------------------- */
+function updateHUD(){
+  $('hudTrial').textContent=Math.max(0,Math.min(NTRIAL,G.idx+1));
+  $('hH').textContent=G.results.H; $('hM').textContent=G.results.M;
+  $('hF').textContent=G.results.FA; $('hR').textContent=G.results.CR;
+}
+let toastTimer=null;
+function toast(main,sub,color,good){
+  const el=$('toast');
+  el.innerHTML=`${main}<span class="sub">${sub}</span>`;
+  el.style.color=color;
+  el.style.background=good?'rgba(20,50,35,.72)':'rgba(50,20,32,.72)';
+  el.style.border='2px solid '+color+'66';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),1150);
+}
+function toastHide(){ $('toast').classList.remove('show'); }
+
+/* ---------------------------------------------------------------
+   10. 音效（WebAudio 合成，无外部文件）
+   --------------------------------------------------------------- */
+let AC=null;
+function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; }
+function beep(freq,dur,vol,type){
+  const a=ac(); if(!a) return;
+  const o=a.createOscillator(), g=a.createGain();
+  o.type=type||'sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(vol,a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur);
+  o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur);
+}
+function impact(){ beep(880,0.07,0.09,'triangle'); setTimeout(()=>beep(430,0.12,0.05,'sine'),20); }
+function thud(){ beep(120,0.16,0.05,'sine'); }
+
+/* ---------------------------------------------------------------
+   11. 绘制：球 / 球拍 / 标记 / 节奏条
+   --------------------------------------------------------------- */
+function drawBall(){
+  const b=G.ball; if(!b) return;
+  const p=proj(b.x,b.y,b.z); if(!p) return;
+
+  // 视觉噪声：抖动幅度随球速增大
+  const sp=Math.hypot(b.vx,b.vy,b.vz);
+  const sig=DIFF[G.diff].noise*(0.9+sp*0.22);
+  const tt=G.clock;
+  const jx=(Math.sin(tt*37.1+b.jseed)*0.55+Math.sin(tt*13.7+b.jseed*1.7)*0.45+gauss()*0.25)*sig;
+  const jy=(Math.cos(tt*31.3+b.jseed*0.6)*0.55+Math.cos(tt*17.1+b.jseed*2.1)*0.45+gauss()*0.25)*sig;
+
+  // 影子
+  const gp=proj(b.x,0,b.z);
+  if(gp&&b.y<3.2){
+    const rr=FOC*BALL_R/gp.d;
+    const a=clamp(0.42-b.y*0.09,0.08,0.42)*DIFF[G.diff].ballA;
+    ctx.save(); ctx.beginPath();
+    ctx.ellipse(gp.x+jx*0.5, gp.y, rr*1.5, rr*0.5, 0,0,7);
+    ctx.fillStyle=`rgba(24,18,44,${a})`; ctx.fill(); ctx.restore();
+  }
+
+  // 轨迹拖尾
+  if(b.trail.length>1){
+    ctx.save();
+    for(let i=1;i<b.trail.length;i++){
+      const t0=b.trail[i-1], t1=b.trail[i];
+      ctx.beginPath(); ctx.moveTo(t0.x,t0.y); ctx.lineTo(t1.x,t1.y);
+      ctx.strokeStyle=`rgba(233,255,120,${0.05+0.22*(i/b.trail.length)})`;
+      ctx.lineWidth=Math.max(1,FOC*BALL_R/t0.d*(i/b.trail.length)*1.1);
+      ctx.lineCap='round'; ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  const r=Math.max(2.4,FOC*BALL_R/p.d);
+  const sx=p.x+jx, sy=p.y+jy;
+  const A=DIFF[G.diff].ballA;
+  // 光晕
+  const g=ctx.createRadialGradient(sx,sy,r*0.6,sx,sy,r*2.6);
+  g.addColorStop(0,`rgba(226,255,90,${0.34*A})`); g.addColorStop(1,'rgba(226,255,90,0)');
+  ctx.beginPath(); ctx.arc(sx,sy,r*2.6,0,7); ctx.fillStyle=g; ctx.fill();
+  // 球体
+  const bg=ctx.createRadialGradient(sx-r*0.35,sy-r*0.4,r*0.15,sx,sy,r*1.05);
+  bg.addColorStop(0,`rgba(248,255,170,${A})`); bg.addColorStop(0.6,`rgba(214,242,50,${A})`); bg.addColorStop(1,`rgba(150,178,20,${A})`);
+  ctx.beginPath(); ctx.arc(sx,sy,r,0,7); ctx.fillStyle=bg; ctx.fill();
+  // 缝线
+  if(r>3.4){
+    ctx.save(); ctx.beginPath(); ctx.arc(sx,sy,r*0.97,0,7); ctx.clip();
+    ctx.strokeStyle=`rgba(255,255,255,${0.75*A})`; ctx.lineWidth=Math.max(1,r*0.17);
+    ctx.beginPath(); ctx.arc(sx-r*1.15,sy,r*1.15,-1.1,1.1); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sx+r*1.15,sy,r*1.15,Math.PI-1.1,Math.PI+1.1); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/* 第一视角球拍（前景） */
+function drawRacket(){
+  const sc=H*0.52;
+  const sw=G.swingAnim;                       // 1 → 挥拍动作中
+  const prog=1-sw;                            // 0→1 随时间推进
+  const ang=lerp(-0.42, 0.95, sw>0?Math.min(1,prog*1.5):0) + (sw>0?0:0);
+  const baseX=W*0.845 - sw*W*0.10;
+  const baseY=H*1.02 + sw*H*0.05;
+
+  ctx.save(); ctx.translate(baseX,baseY); ctx.rotate(sw>0? lerp(-0.35,1.05,Math.min(1,prog*1.6)) : -0.35);
+  // 手臂
+  ctx.fillStyle='#f0c9a8';
+  ctx.beginPath(); ctx.roundRect(-sc*0.075,sc*0.02,sc*0.15,sc*0.30,sc*0.07); ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,.12)';
+  ctx.beginPath(); ctx.roundRect(-sc*0.075,sc*0.02,sc*0.075,sc*0.30,sc*0.07); ctx.fill();
+  // 拍柄
+  ctx.strokeStyle='#2b2b3a'; ctx.lineWidth=sc*0.036; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,sc*0.04); ctx.lineTo(0,-sc*0.24); ctx.stroke();
+  // 拍框
+  ctx.save(); ctx.translate(0,-sc*0.24); ctx.rotate(0);
+  ctx.strokeStyle='#ffd166'; ctx.lineWidth=sc*0.030;
+  ctx.beginPath(); ctx.ellipse(0,-sc*0.20,sc*0.128,sc*0.185,0,0,7); ctx.stroke();
+  // 拍线
+  ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=Math.max(1,sc*0.007);
+  for(let i=-3;i<=3;i++){
+    const fx=i*sc*0.036, hw=sc*0.128*Math.sqrt(Math.max(0,1-(fx/(sc*0.128))**2));
+    ctx.beginPath(); ctx.moveTo(fx,-sc*0.20-hw*0.78); ctx.lineTo(fx,-sc*0.20+hw*0.78); ctx.stroke();
+  }
+  for(let i=-4;i<=4;i++){
+    const fy=-sc*0.20+i*sc*0.040, hw=sc*0.185*Math.sqrt(Math.max(0,1-(i*sc*0.040/(sc*0.185))**2));
+    ctx.beginPath(); ctx.moveTo(-hw*0.70,fy); ctx.lineTo(hw*0.70,fy); ctx.stroke();
+  }
+  ctx.restore(); ctx.restore();
+}
+
+/* 落点标记 */
+function drawMark(){
+  const m=G.mark; if(!m) return;
+  const p=proj(m.x,0.02,m.z); if(!p) return;
+  const age=m.age, a=clamp(age<0.25?age/0.25:1-(age-0.25)/1.3,0,1);
+  if(a<=0) return;
+  const rr=FOC*0.62/p.d;
+  const col=m.inside?'94,227,138':'255,107,129';
+  ctx.save(); ctx.globalAlpha=a;
+  ctx.beginPath(); ctx.ellipse(p.x,p.y,rr,rr*0.36,0,0,7);
+  ctx.strokeStyle=`rgba(${col},1)`; ctx.lineWidth=Math.max(2.5,FOC*0.075/p.d); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(p.x,p.y,rr*0.40,rr*0.145,0,0,7);
+  ctx.fillStyle=`rgba(${col},.75)`; ctx.fill();
+  // 文字（抬高一点，别压住球）
+  const fs=clamp(H*0.030,12,26);
+  const ty=p.y-rr*1.28;
+  ctx.font=`800 ${fs}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  ctx.textAlign='center'; ctx.lineWidth=4; ctx.strokeStyle='rgba(10,8,20,.85)';
+  ctx.strokeText(m.inside?'界内':'界外', p.x, ty);
+  ctx.fillStyle=`rgb(${col})`;
+  ctx.fillText(m.inside?'界内':'界外', p.x, ty);
+  const fs2=clamp(H*0.019,10,15);
+  ctx.font=`500 ${fs2}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  ctx.lineWidth=3;
+  const mm=(Math.abs(m.margin)).toFixed(2)+' m '+(m.inside?'内':'外');
+  ctx.strokeText(mm,p.x,ty+fs*1.12);
+  ctx.fillStyle='rgba(255,255,255,.88)';
+  ctx.fillText(mm,p.x,ty+fs*1.12);
+  ctx.restore();
+}
+
+/* 节奏条：所有试次时长一致，不泄露是球还是空发球 */
+function drawRhythmBar(){
+  if(G.phase!=='fly'&&G.phase!=='pre') return;
+  const bw=W*0.30, bh=Math.max(4,H*0.009), bx=(W-bw)/2, by=H-H*0.055;
+  const frac = G.phase==='pre' ? 0 : clamp(G.t/G.T,0,1);
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,.35)';
+  ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,bh/2); ctx.fill();
+  if(G.phase==='fly'){
+    const g=ctx.createLinearGradient(bx,0,bx+bw,0);
+    g.addColorStop(0,'#ffd166'); g.addColorStop(1,'#ff6b8f');
+    ctx.fillStyle=G.responded?'rgba(94,227,138,.95)':g;
+    ctx.beginPath(); ctx.roundRect(bx,by,bw*(G.responded?1:1-frac),bh,bh/2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ---------------------------------------------------------------
+   12. 主循环
+   --------------------------------------------------------------- */
+let lastT=performance.now();
+function loop(now){
+  let dt=(now-lastT)/1000; lastT=now;
+  dt=clamp(dt,0,0.05);          // 切标签页回来可能给出乱序/超大时间戳，双向夹住
+  G.clock+=dt;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+function update(dt){
+  if(G.state!=='play') return;
+  if(G.phase==='pre'){
+    G.preT+=dt;
+    if(G.preT>=0.75) beginFlight();
+  }
+  else if(G.phase==='fly'){
+    G.t+=dt;
+    if(G.ball&&G.ball.mode==='fly'){
+      const p=ballPosAt(G.t);
+      G.ball.x=p.x; G.ball.y=p.y; G.ball.z=p.z;
+      const pp=proj(p.x,p.y,p.z);
+      if(pp){ G.ball.trail.push({x:pp.x,y:pp.y,d:pp.d});
+              if(G.ball.trail.length>11) G.ball.trail.shift(); }
+    }
+    if(G.t>=G.T) resolve();
+  }
+  else if(G.phase==='post'){
+    G.postT+=dt;
+    if(G.ball){
+      const b=G.ball; b.t+=dt;
+      if(b.mode==='bounce'||b.mode==='return'){
+        b.vy-=b.g*dt;
+        b.x+=b.vx*dt; b.y+=b.vy*dt; b.z+=b.vz*dt;
+        if(b.y<0&&b.vy<0){ b.y=0; b.vy=-b.vy*0.55; b.vx*=0.85; b.vz*=0.85; }
+        const pp=proj(b.x,b.y,b.z);
+        if(pp){ b.trail.push({x:pp.x,y:pp.y,d:pp.d}); if(b.trail.length>11) b.trail.shift(); }
+        if(b.z<-17||b.z>16||Math.abs(b.x)>10) G.ball=null;
+      }
+    }
+    if(G.mark) G.mark.age+=dt;
+    if(G.postT>=1.55) nextTrial();
+  }
+  // 挥拍动画衰减
+  if(G.swingAnim>0){ G.swingAnim=Math.max(0,G.swingAnim-dt*2.6); }
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  drawBackdrop();
+  drawCourt();
+  drawOpponent(G.clock);
+  drawNet();
+  drawBall();          // 网是半透明的，球从网后飞过时能透出来
+  drawMark();
+  drawRacket();
+  drawRhythmBar();
+}
+
+/* ---------------------------------------------------------------
+   13. 结果统计
+   --------------------------------------------------------------- */
+function computeStats(r){
+  const nS=r.H+r.M, nN=r.FA+r.CR;
+  const pH  = nS? r.H/nS : NaN;
+  const pFA = nN? r.FA/nN : NaN;
+  // 四格均非 0 → 直接用原始比例（教科书算法）；
+  // 出现 0 格时 z 会发散，改用 0.5 对数线性校正（Hautus 1995）估个有限值
+  const clean = (r.H>0 && r.M>0 && r.FA>0 && r.CR>0);
+  const hh = clean ? pH  : (r.H +0.5)/(nS+1);
+  const ff = clean ? pFA : (r.FA+0.5)/(nN+1);
+  const zh=zInv(hh), zf=zInv(ff);
+  const dPrime=zh-zf;
+  const beta=Math.exp((zf*zf-zh*zh)/2);
+  const cCrit=-0.5*(zh+zf);
+  // A′（Grier / Snodgrass-Corwin 非参数 ROC 面积），用原始比例，端点单独处理
+  let Aprime;
+  if(pH===pFA) Aprime=0.5;
+  else if(pH>pFA){ const d0=4*pH*(1-pFA); Aprime=d0>1e-9 ? 0.5+((pH-pFA)*(1+pH-pFA))/d0 : 1; }
+  else          { const d0=4*pFA*(1-pH);  Aprime=d0>1e-9 ? 0.5-((pFA-pH)*(1+pFA-pH))/d0 : 0; }
+  Aprime=clamp(Aprime,0,1);
+  return {nS,nN,pH,pFA,dPrime,beta,cCrit,Aprime,clean,extreme:!clean};
+}
+
+/* ---------------------------------------------------------------
+   概念实验室的入口。
+   把这一轮的 H/M/FA/CR、难度，以及 10 个有落点的球（不含"没发球"的 2 个）
+   编进 URL hash 带过去。落点余量 = landZ − BN，界内为正、界外为负，
+   与 buildTrials() 里 landZ 的定义一致，也正好是实验室横轴的单位（米）。
+   用 hash 而不是 sessionStorage：file:// 下 sessionStorage 不可靠。
+   文件名保持 ASCII：GitHub Pages 上中文名会 404。
+   --------------------------------------------------------------- */
+const LAB_FILE='concept-lab.html';
+function labURL(withData){
+  let hash='';
+  if(withData && G.results){
+    const r=G.results;
+    const trials=(G.trials||[])
+      .filter(t=>t.type!=='none' && typeof t.landZ==='number')
+      .map(t=>(t.type==='in'?'i':'o')+(t.landZ-BN).toFixed(2))
+      .join(',');
+    hash='#'+new URLSearchParams({
+      h:r.H, m:r.M, fa:r.FA, cr:r.CR, d:G.diff, trials
+    }).toString();
+  }
+  return LAB_FILE+hash;
+}
+function wireLabLinks(){
+  const link=$('labLink'), btn=$('btnLab');
+  if(link) link.href=labURL(false);          // 开始页：不带数据，空手进实验室
+  if(btn)  btn.href =labURL(true);           // 结果页：带着这一轮的数据进去
+}
+
+function renderResult(){
+  const r=G.results;
+  const s=computeStats(r);
+  $('resTitle').textContent=`本 轮 结 果 · ${DIFF[G.diff].name}`;
+  wireLabLinks();
+
+  $('resMatrix').innerHTML=`
+    <tr>
+      <th style="border:none;background:none"></th>
+      <th>挥拍</th><th>不挥拍</th>
+    </tr>
+    <tr>
+      <th>界内球<br><span style="font-weight:400;opacity:.6;font-size:.82em">信号</span></th>
+      <td class="hit"><div class="num cH">${r.H}</div><div class="lbl">击中 Hit</div></td>
+      <td class="miss"><div class="num cM">${r.M}</div><div class="lbl">漏报 Miss</div></td>
+    </tr>
+    <tr>
+      <th>界外球 / 无球<br><span style="font-weight:400;opacity:.6;font-size:.82em">噪音</span></th>
+      <td class="fa"><div class="num cF">${r.FA}</div><div class="lbl">虚报 F.Alarm</div></td>
+      <td class="cr"><div class="num cR">${r.CR}</div><div class="lbl">正确拒绝 C.Rej</div></td>
+    </tr>`;
+
+  const fx=(v,d=2)=>isFinite(v)?v.toFixed(d):'—';
+  $('resMetrics').innerHTML=`
+    <div class="m"><span>试次数</span><span>${NTRIAL}（信号 ${s.nS} / 噪音 ${s.nN}）</span></div>
+    <div class="m"><span>击中率 P(H)</span><span class="cH">${fx(s.pH,2)} <span style="opacity:.5;font-weight:400">(${r.H}/${s.nS})</span></span></div>
+    <div class="m"><span>虚报率 P(FA)</span><span class="cF">${fx(s.pFA,2)} <span style="opacity:.5;font-weight:400">(${r.FA}/${s.nN})</span></span></div>
+    <div class="m"><span>辨别力 d′</span><span>${fx(s.dPrime)}</span></div>
+    <div class="m"><span>似然比 β</span><span>${fx(s.beta)}</span></div>
+    <div class="m"><span>判断标准 c</span><span>${fx(s.cCrit)}</span></div>
+    <div class="m"><span>ROC 面积 A′</span><span>${fx(s.Aprime,3)}</span></div>
+    <div class="note">d′ = z(H) − z(FA)，衡量你分辨「界内/界外」的能力，与偏向无关。<br>
+      c、β 衡量偏向：c&lt;0（β&lt;1）偏冒进，倾向挥拍；c&gt;0（β&gt;1）偏保守，倾向放掉。<br>
+      A′ 为非参数 ROC 面积，0.5 = 瞎猜，1 = 完美。<br>
+      ${s.extreme?'本次 H/M/FA/CR 中有 0 格，d′ 等指标已用 0.5 对数线性校正估算。':'各格均非 0，指标无需校正。'}</div>`;
+
+  drawROC(s);
+
+  const ch=Math.hypot(s.pFA-0, s.pH-0);
+  let v='';
+  v+=`你这一轮：<b>d′ = ${fx(s.dPrime)}</b>`+
+     (s.dPrime<0.6?'（几乎分不出界内界外）':s.dPrime<1.5?'（有一定分辨力）':s.dPrime<2.5?'（分辨力不错）':'（分辨力相当强）')+
+     `，<b>c = ${fx(s.cCrit)}</b>`+
+     (s.cCrit<-0.15?'，偏<em>冒进</em>——你倾向于挥拍，代价是虚报多。':s.cCrit>0.15?'，偏<em>保守</em>——你宁可放掉也不挥空，代价是漏报多。':'，比较<em>中性</em>——不怎么偏。）');
+  v+=`<br>A′ = <b>${fx(s.Aprime,3)}</b>（0.5 是瞎猜）。`;
+  if(s.pH>0.9&&s.pFA<0.1) v+=` 又准又稳，这轮打得很干净。`;
+  else if(s.pFA>0.5)       v+=` 虚报偏多：下次先看清球有没有发出来、过没过底线，再决定抬手。`;
+  else if(s.pH<0.5)        v+=` 漏报偏多：界内球放掉就是直接丢分，判断"可能进"时不妨打。`;
+  else                     v+=` 这个偏向配上你的 d′，就是你在本轮里的最优策略。`;
+  $('verdict').innerHTML=v;
+}
+
+function drawROC(s){
+  const c=$('roc'), x=c.getContext('2d');
+  const w=c.width, h=c.height, pad=32;
+  x.clearRect(0,0,w,h);
+  const X=v=>pad+v*(w-pad-10), Y=v=>h-pad-v*(h-pad-12);
+
+  // 网格
+  x.strokeStyle='rgba(255,255,255,.10)'; x.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const v=i/4;
+    x.beginPath(); x.moveTo(X(v),Y(0)); x.lineTo(X(v),Y(1)); x.stroke();
+    x.beginPath(); x.moveTo(X(0),Y(v)); x.lineTo(X(1),Y(v)); x.stroke();
+  }
+  // 坐标轴
+  x.strokeStyle='rgba(255,255,255,.45)'; x.lineWidth=1.4;
+  x.beginPath(); x.moveTo(X(0),Y(0)); x.lineTo(X(1),Y(0)); x.lineTo(X(1),Y(1)); x.stroke();
+  // 对角线（瞎猜）
+  x.setLineDash([4,4]); x.strokeStyle='rgba(255,255,255,.30)';
+  x.beginPath(); x.moveTo(X(0),Y(0)); x.lineTo(X(1),Y(1)); x.stroke();
+  x.setLineDash([]);
+  // 拟合 ROC（等方差假设）
+  const dp=isFinite(s.dPrime)?clamp(s.dPrime,-4,6):0;
+  x.beginPath(); x.strokeStyle='rgba(120,200,255,.8)'; x.lineWidth=1.6;
+  for(let i=0;i<=100;i++){
+    const f=i/100; let t=Phi(zInv(clamp(f,0.0005,0.9995))+dp);
+    i?x.lineTo(X(f),Y(t)):x.moveTo(X(f),Y(t));
+  }
+  x.stroke();
+  // 实测点
+  if(isFinite(s.pFA)&&isFinite(s.pH)){
+    x.fillStyle='#ff6b8f';
+    x.beginPath(); x.arc(X(s.pFA),Y(s.pH),5.5,0,7); x.fill();
+    x.strokeStyle='rgba(255,255,255,.9)'; x.lineWidth=1.6; x.stroke();
+    x.font='600 11px "PingFang SC","Microsoft YaHei",sans-serif';
+    x.fillStyle='rgba(255,255,255,.9)'; x.textAlign='left';
+    const lx=Math.min(X(s.pFA)+9,w-96);
+    x.fillText(`你 (${s.pFA.toFixed(2)}, ${s.pH.toFixed(2)})`, lx, Math.max(Y(s.pH)-8,14));
+  }
+  // 轴标
+  x.fillStyle='rgba(255,255,255,.6)'; x.font='11px sans-serif';
+  x.textAlign='center'; x.fillText('虚报率 P(FA)',(X(0)+X(1))/2,h-9);
+  x.save(); x.translate(11,(Y(0)+Y(1))/2); x.rotate(-Math.PI/2);
+  x.fillText('击中率 P(H)',0,0); x.restore();
+}
+
+/* ---------------------------------------------------------------
+   14. 启动
+   --------------------------------------------------------------- */
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
+    r=Math.min(r,w/2,h/2);
+    this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r); this.arcTo(x+w,y+h,x,y+h,r);
+    this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath(); return this;
+  };
+}
+wireLabLinks();          // 开始页那个角落链接（不带数据）
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
